@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Garden Journal</title>
+<link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+
+<!-- ─── Garden Overview Screen ─────────────────────────────────────── -->
+<div class="screen active" id="overviewScreen">
+  <div class="header">
+    <div>
+      <div class="header-title">Garden Journal</div>
+      <div class="header-sub" id="zoneCountLabel">0 zones</div>
+    </div>
+    <div class="level-badge">
+      <div class="level-label">Vision</div>
+      <div class="level-value" id="levelValue">Lv 1</div>
+      <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="zone-list" id="zoneList"></div>
+  <button class="fab" id="addZoneBtn" title="Add zone">+</button>
+</div>
+
+<!-- ─── Zone Detail Screen ─────────────────────────────────────────── -->
+<div class="screen" id="zoneScreen">
+  <div class="detail-header">
+    <button class="back-btn" id="backBtn">←</button>
+    <div class="detail-title">
+      <h2 id="zoneName">Zone</h2>
+      <div class="sub" id="zoneTypeLabel">—</div>
+    </div>
+    <button class="detail-menu-btn" id="zoneMenuBtn">⋯</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="map">Map</button>
+    <button class="tab" data-tab="plants">Plants</button>
+    <button class="tab" data-tab="journal">Journal</button>
+  </div>
+
+  <div class="tab-content map active" id="tabMap">
+    <div class="map-empty" id="mapEmpty">
+      <h3>No reference photo yet</h3>
+      <p>Upload a photo of this zone to start tagging plants. Claude will analyze it and suggest tags.</p>
+      <button class="upload-btn" id="uploadInitialBtn">Upload Photo</button>
+    </div>
+    <div class="map" id="map" style="display:none">
+      <div class="map-stage" id="stage">
+        <img id="zoneImg" alt="" draggable="false">
+      </div>
+    </div>
+    <div class="zoom-controls" id="zoomControls" style="display:none">
+      <button class="zoom-btn" id="zoomIn">+</button>
+      <span class="zoom-label" id="zoomLabel">100%</span>
+      <button class="zoom-btn" id="zoomOut">−</button>
+      <button class="zoom-btn reset" id="zoomReset">FIT</button>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tabPlants" style="display:none">
+    <div class="list-content" id="plantsList"></div>
+  </div>
+
+  <div class="tab-content" id="tabJournal" style="display:none">
+    <div class="list-content" id="journalList"></div>
+  </div>
+</div>
+
+<!-- ─── Press rings ────────────────────────────────────────────────── -->
+<div class="press-ring" id="pressRing"><svg viewBox="0 0 50 50"><circle class="bg" cx="25" cy="25" r="22"></circle><circle class="fg" cx="25" cy="25" r="22"></circle></svg></div>
+<div class="tag-ring" id="tagRing"><svg viewBox="0 0 120 120" width="120" height="120"><circle class="bg" cx="60" cy="60" r="54"></circle><circle class="fg" cx="60" cy="60" r="54"></circle></svg></div>
+
+<!-- ─── Add/Edit Zone Dialog ───────────────────────────────────────── -->
+<div class="dialog-overlay" id="zoneDialog">
+  <div class="dialog">
+    <h3 id="zoneDialogTitle">New Zone</h3>
+    <p class="dlg-sub">Define a new tracking area</p>
+    <label>Name</label>
+    <input type="text" id="zoneNameInput" placeholder="e.g. Bed 1, Patio, Cherry Tomato">
+    <label>Type</label>
+    <select id="zoneTypeInput">
+      <option value="bed">Garden Bed</option>
+      <option value="patio">Patio / Container Collection</option>
+      <option value="container">Single Container</option>
+      <option value="single_plant">Single Plant</option>
+      <option value="nursery">Nursery / Seedling Tray</option>
+    </select>
+    <div class="dialog-buttons">
+      <button class="btn btn-cancel" id="zoneCancel">Cancel</button>
+      <button class="btn btn-delete" id="zoneDelete" style="display:none">Delete</button>
+      <button class="btn btn-confirm" id="zoneConfirm">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── AI Review Screen (full screen) ─────────────────────────────── -->
+<div class="review-screen" id="reviewScreen">
+  <div class="review-header">
+    <div>
+      <h2 id="reviewTitle">Review Tags</h2>
+      <div class="sub" id="reviewSub">— plants identified</div>
+    </div>
+    <div class="review-conf high" id="reviewConfBadge" style="display:none">— %</div>
+  </div>
+
+  <div class="review-photo" id="reviewPhoto">
+    <img id="reviewImg" alt="">
+  </div>
+
+  <div class="review-status" id="reviewStatus" style="display:none"></div>
+
+  <div class="review-list" id="reviewList"></div>
+
+  <div class="review-footer" id="reviewFooter" style="display:none">
+    <button class="btn btn-cancel" id="reviewCancel">Cancel</button>
+    <button class="btn btn-secondary" id="reviewMoreAngles" style="display:none">+ Angle</button>
+    <button class="btn btn-confirm" id="reviewAccept">Accept</button>
+  </div>
+</div>
+
+<!-- ─── Plant Edit Dialog ──────────────────────────────────────────── -->
+<div class="dialog-overlay" id="plantDialog">
+  <div class="dialog">
+    <h3 id="plantDialogTitle">Edit Plant</h3>
+    <label>Name</label>
+    <input type="text" id="plantName" placeholder="e.g. Bell Pepper">
+    <label>Category</label>
+    <select id="plantCategory">
+      <option value="unknown">Unknown</option>
+      <option value="fruiting">Fruiting</option>
+      <option value="herb">Herb</option>
+      <option value="flowering">Flowering</option>
+    </select>
+    <label>Notes</label>
+    <input type="text" id="plantNotes" placeholder="e.g. Right side, healthy">
+    <div class="dialog-buttons">
+      <button class="btn btn-cancel" id="plantCancel">Cancel</button>
+      <button class="btn btn-delete" id="plantDelete" style="display:none">Delete</button>
+      <button class="btn btn-confirm" id="plantConfirm">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Care Panel ─────────────────────────────────────────────────── -->
+<div class="care-panel" id="carePanel">
+  <div class="care-handle"></div>
+  <div class="care-header">
+    <div>
+      <div class="care-title" id="careTitle">Plant Care</div>
+      <div class="care-sub" id="careSub"></div>
+    </div>
+    <button class="care-close" id="careClose">×</button>
+  </div>
+  <div class="care-body" id="careBody"></div>
+</div>
+
+<!-- ─── Toast ──────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ─── Hidden file input ──────────────────────────────────────────── -->
+<input type="file" id="photoInput" accept="image/*" style="display:none">
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
