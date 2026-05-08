@@ -30,33 +30,37 @@ const zoneScreen = initZone({
 
 const review = initReview();
 
-// Photo input drives both new-zone creation and additional uploads.
-const photoInput = $('photoInput');
+// Two file inputs, one per flow. Each is wired to a <label for="..."> in
+// the markup so the picker opens via native HTML semantics — no
+// programmatic .click(), which sandboxed iframes block.
+const photoInput        = $('photoInput');         // additional uploads on the current zone
+const photoInputNewZone = $('photoInputNewZone');  // FAB → new zone, then upload
+
 photoInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
-  const isCreatingZone = photoInput.dataset.creatingZone === '1';
-  delete photoInput.dataset.creatingZone;
   photoInput.value = '';
   if (!file) return;
+  await review.handlePhoto(file);
+});
 
-  if (isCreatingZone) {
-    const z = repo.zones.create({
-      name: `Zone ${repo.zones.list().length + 1}`,
-      type: 'bed',
-    });
-    awardXP(5, 'New zone created');
-    events.emit(EV.ZONES_CHANGED);
-    zoneScreen.show(z.id);
-  }
+photoInputNewZone.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  photoInputNewZone.value = '';
+  if (!file) return;
+
+  const z = repo.zones.create({
+    name: `Zone ${repo.zones.list().length + 1}`,
+    type: 'bed',
+  });
+  awardXP(5, 'New zone created');
+  events.emit(EV.ZONES_CHANGED);
+  zoneScreen.show(z.id);
   await review.handlePhoto(file);
 });
 
 const overview = initOverview({
   onZoneOpen: (zoneId) => zoneScreen.show(zoneId),
-  onUploadForNewZone: () => {
-    photoInput.dataset.creatingZone = '1';
-    photoInput.click();
-  },
+  onUploadForNewZone: () => { /* label opens picker natively — nothing to do here */ },
   onDevCreateZone: async () => {
     const z = repo.zones.create({
       name: `Zone ${repo.zones.list().length + 1}`,
@@ -70,19 +74,18 @@ const overview = initOverview({
 });
 
 // Upload-photo button on a zone with no reference photo yet.
-// Short tap → file picker; long-press → dev image fallback.
+// Same pattern: it's a <label for="photoInput">, and long-press calls
+// preventDefault on the click to suppress the native picker so the dev
+// image flow can take over.
 const uploadInitialBtn = $('uploadInitialBtn');
 let uploadBtnHoldTimer = null;
-let uploadBtnSuppressClick = false;
-uploadInitialBtn.addEventListener('click', () => {
-  if (uploadBtnSuppressClick) { uploadBtnSuppressClick = false; return; }
-  photoInput.click();
-});
+let uploadBtnIsLongPress = false;
 uploadInitialBtn.addEventListener('pointerdown', () => {
+  uploadBtnIsLongPress = false;
   if (uploadBtnHoldTimer) clearTimeout(uploadBtnHoldTimer);
   uploadBtnHoldTimer = setTimeout(() => {
     uploadBtnHoldTimer = null;
-    uploadBtnSuppressClick = true;
+    uploadBtnIsLongPress = true;
     if (navigator.vibrate) navigator.vibrate(30);
     events.emit(EV.TOAST, { msg: 'Dev: using test image…' });
     review.handleDevPhoto();
@@ -92,6 +95,13 @@ uploadInitialBtn.addEventListener('pointerdown', () => {
   uploadInitialBtn.addEventListener(ev, () => {
     if (uploadBtnHoldTimer) { clearTimeout(uploadBtnHoldTimer); uploadBtnHoldTimer = null; }
   });
+});
+uploadInitialBtn.addEventListener('click', (e) => {
+  if (uploadBtnIsLongPress) {
+    e.preventDefault();          // stop the native picker from opening
+    uploadBtnIsLongPress = false;
+  }
+  // Otherwise: let the label do its thing → native picker opens.
 });
 
 // Cross-module navigation

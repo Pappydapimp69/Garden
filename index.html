@@ -22,7 +22,7 @@
     </div>
   </div>
   <div class="zone-list" id="zoneList"></div>
-  <button class="fab" id="addZoneBtn" title="Add zone">+</button>
+  <label class="fab" id="addZoneBtn" for="photoInputNewZone" title="Add zone">+</label>
 </div>
 
 <!-- ─── Zone Detail Screen ─────────────────────────────────────────── -->
@@ -46,7 +46,7 @@
     <div class="map-empty" id="mapEmpty">
       <h3>No reference photo yet</h3>
       <p>Upload a photo of this zone to start tagging plants. Claude will analyze it and suggest tags.</p>
-      <button class="upload-btn" id="uploadInitialBtn">Upload Photo</button>
+      <label class="upload-btn" id="uploadInitialBtn" for="photoInput">Upload Photo</label>
     </div>
     <div class="map" id="map" style="display:none">
       <div class="map-stage" id="stage">
@@ -117,7 +117,7 @@
 
   <div class="review-footer" id="reviewFooter" style="display:none">
     <button class="btn btn-cancel" id="reviewCancel">Cancel</button>
-    <button class="btn btn-secondary" id="reviewMoreAngles" style="display:none">+ Angle</button>
+    <label class="btn btn-secondary" id="reviewMoreAngles" for="photoInput" style="display:none">+ Angle</label>
     <button class="btn btn-confirm" id="reviewAccept">Accept</button>
   </div>
 </div>
@@ -161,8 +161,11 @@
 <!-- ─── Toast ──────────────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
-<!-- ─── Hidden file input ──────────────────────────────────────────── -->
-<input type="file" id="photoInput" accept="image/*" style="display:none">
+<!-- ─── Hidden file inputs ─────────────────────────────────────────── -->
+<!-- Off-screen instead of display:none so sandboxed iframes still let the
+     associated <label for="..."> open the native picker. -->
+<input type="file" id="photoInput"        accept="image/*" class="hidden-file">
+<input type="file" id="photoInputNewZone" accept="image/*" class="hidden-file">
 
 <script type="module" src="./src/main.js"></script>
 </body>

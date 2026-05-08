@@ -22,7 +22,6 @@ export function initReview() {
   const cancelBtn  = $('reviewCancel');
   const moreBtn    = $('reviewMoreAngles');
   const acceptBtn  = $('reviewAccept');
-  const photoInput = $('photoInput');
 
   let pendingTags    = [];
   let pendingDataUrl = null;
@@ -523,10 +522,10 @@ export function initReview() {
   // ── Wire up footer buttons ───────────────────────────────────────
   cancelBtn.addEventListener('click', () => { stopPhraseCycle(); close(); });
 
-  moreBtn.addEventListener('click', () => {
-    photoInput.click();
-    close();
-  });
+  // moreBtn is a <label for="photoInput"> — the picker opens natively when
+  // tapped. We just need to close the review screen; the file input's
+  // change handler will reopen processing once a file is picked.
+  moreBtn.addEventListener('click', () => { close(); });
 
   acceptBtn.addEventListener('click', async () => {
     // When in re-ID mode, acceptBtn.onclick is set above. This default handler

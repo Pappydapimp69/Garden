@@ -52,24 +52,20 @@ export function initOverview({ onZoneOpen, onUploadForNewZone, onDevCreateZone }
     });
   }
 
-  // FAB: short tap → file picker for new zone; long-press → dev test image.
+  // FAB is a <label for="photoInputNewZone">. The browser opens the file
+  // picker via native HTML semantics on tap — we never call .click() on the
+  // hidden input, which lets sandboxed iframes (Claude.ai preview) work too.
+  // Long-press intercepts via preventDefault on the click so the picker
+  // doesn't open before the dev-image flow runs.
   let addZoneHoldTimer = null;
-  let addZoneSuppressClick = false;
-
-  function triggerNewZoneUpload(e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    if (addZoneSuppressClick) { addZoneSuppressClick = false; return; }
-    onUploadForNewZone();
-  }
-
-  addZoneBtn.addEventListener('click', triggerNewZoneUpload);
-  addZoneBtn.addEventListener('touchend', triggerNewZoneUpload, { passive: false });
+  let addZoneIsLongPress = false;
 
   addZoneBtn.addEventListener('pointerdown', () => {
+    addZoneIsLongPress = false;
     if (addZoneHoldTimer) clearTimeout(addZoneHoldTimer);
     addZoneHoldTimer = setTimeout(() => {
       addZoneHoldTimer = null;
-      addZoneSuppressClick = true;
+      addZoneIsLongPress = true;
       if (navigator.vibrate) navigator.vibrate(30);
       events.emit(EV.TOAST, { msg: 'Dev: creating zone with test image…' });
       onDevCreateZone();
@@ -79,6 +75,14 @@ export function initOverview({ onZoneOpen, onUploadForNewZone, onDevCreateZone }
     addZoneBtn.addEventListener(ev, () => {
       if (addZoneHoldTimer) { clearTimeout(addZoneHoldTimer); addZoneHoldTimer = null; }
     });
+  });
+  addZoneBtn.addEventListener('click', (e) => {
+    if (addZoneIsLongPress) {
+      e.preventDefault();        // stop the native picker from opening
+      addZoneIsLongPress = false;
+      return;
+    }
+    onUploadForNewZone();        // tell main.js a new-zone upload is starting
   });
 
   // Listen for changes

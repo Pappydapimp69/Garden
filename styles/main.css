@@ -35,8 +35,12 @@ input, select, textarea { font-family:inherit; }
 .zone-card-stats span strong { color:#a8c298; }
 .zone-thumb { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-top:8px; background:#000; }
 
-.fab { position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:#27ae60; color:#fff; border:none; font-size:1.6rem; box-shadow:0 6px 20px rgba(39,174,96,0.4); z-index:100; transition:transform 0.15s; touch-action:manipulation; }
+.fab { position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:#27ae60; color:#fff; border:none; font-size:1.6rem; box-shadow:0 6px 20px rgba(39,174,96,0.4); z-index:100; transition:transform 0.15s; touch-action:manipulation; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .fab:active { transform:scale(0.92); }
+
+/* Hidden file inputs are off-screen, not display:none, so sandboxed iframes
+   still let an associated <label for="..."> open the native picker. */
+.hidden-file { position:fixed; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none; }
 
 /* ── Zone detail screen ───────────────────────────────────────────── */
 .detail-header { padding:14px 16px 12px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; align-items:center; gap:10px; }
@@ -62,7 +66,7 @@ input, select, textarea { font-family:inherit; }
 .map-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; }
 .map-empty h3 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.05rem; margin-bottom:8px; }
 .map-empty p { font-size:0.7rem; color:#7a8a6a; line-height:1.6; max-width:300px; margin-bottom:20px; }
-.upload-btn { background:#27ae60; color:#fff; border:none; padding:12px 24px; border-radius:6px; font-size:0.7rem; font-weight:700; letter-spacing:0.05em; }
+.upload-btn { background:#27ae60; color:#fff; border:none; padding:12px 24px; border-radius:6px; font-size:0.7rem; font-weight:700; letter-spacing:0.05em; cursor:pointer; display:inline-block; }
 
 .zoom-controls { position:absolute; top:14px; right:14px; z-index:50; display:flex; flex-direction:column; gap:1px; background:rgba(8,18,8,0.85); backdrop-filter:blur(10px); border:1px solid rgba(58,106,42,0.5); border-radius:8px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.5); }
 .zoom-btn { width:34px; height:34px; background:transparent; border:none; color:#a8d878; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:background 0.15s; border-bottom:1px solid rgba(58,106,42,0.3); }
@@ -122,7 +126,7 @@ input, select, textarea { font-family:inherit; }
 .dialog textarea { min-height:60px; resize:vertical; }
 .dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color:#a8d878; }
 .dialog-buttons { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
-.btn { flex:1; min-width:80px; padding:9px; border:none; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:700; letter-spacing:0.05em; }
+.btn { flex:1; min-width:80px; padding:9px; border:none; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:700; letter-spacing:0.05em; text-align:center; display:inline-block; }
 .btn-confirm { background:#27ae60; color:#fff; }
 .btn-cancel  { background:#2a3a2a; color:#7aaa5a; border:1px solid #3a6a2a; }
 .btn-delete  { background:#c0392b; color:#fff; }
