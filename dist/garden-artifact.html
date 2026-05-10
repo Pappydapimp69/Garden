@@ -2977,25 +2977,37 @@ const photoInput        = $('photoInput');         // additional uploads on the 
 const photoInputNewZone = $('photoInputNewZone');  // FAB → new zone, then upload
 
 photoInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  photoInput.value = '';
-  if (!file) return;
-  await review.handlePhoto(file);
+  try {
+    const file = e.target.files[0];
+    photoInput.value = '';
+    if (!file) return;
+    events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
+    await review.handlePhoto(file);
+  } catch (err) {
+    events.emit(EV.TOAST, { msg: 'Upload failed: ' + (err.message || err), kind: 'error' });
+    console.error('photoInput change error:', err);
+  }
 });
 
 photoInputNewZone.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  photoInputNewZone.value = '';
-  if (!file) return;
+  try {
+    const file = e.target.files[0];
+    photoInputNewZone.value = '';
+    if (!file) return;
+    events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
 
-  const z = repo.zones.create({
-    name: `Zone ${repo.zones.list().length + 1}`,
-    type: 'bed',
-  });
-  awardXP(5, 'New zone created');
-  events.emit(EV.ZONES_CHANGED);
-  zoneScreen.show(z.id);
-  await review.handlePhoto(file);
+    const z = repo.zones.create({
+      name: `Zone ${repo.zones.list().length + 1}`,
+      type: 'bed',
+    });
+    awardXP(5, 'New zone created');
+    events.emit(EV.ZONES_CHANGED);
+    zoneScreen.show(z.id);
+    await review.handlePhoto(file);
+  } catch (err) {
+    events.emit(EV.TOAST, { msg: 'Upload failed: ' + (err.message || err), kind: 'error' });
+    console.error('photoInputNewZone change error:', err);
+  }
 });
 
 const overview = initOverview({
