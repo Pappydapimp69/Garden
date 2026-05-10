@@ -8,6 +8,7 @@ import { analyzeFullPhoto } from '../vision/analyze.js';
 import { reIdentifyBatch } from '../vision/reidentify.js';
 import { randomPhrase } from '../assets/loadingPhrases.js';
 import { DEV_TEST_IMAGE } from '../assets/devTestImage.js';
+import { extractCaptureDate } from '../image/exif.js';
 
 export function initReview() {
   const screen     = $('reviewScreen');
@@ -23,17 +24,21 @@ export function initReview() {
   const moreBtn    = $('reviewMoreAngles');
   const acceptBtn  = $('reviewAccept');
 
-  let pendingTags    = [];
-  let pendingDataUrl = null;
-  let selectedTagId  = null;
-  let phraseInterval = null;
-  let reidContext    = null;
+  let pendingTags      = [];
+  let pendingDataUrl   = null;
+  let pendingCaptureDate = null;
+  let pendingFallbackDate = null;
+  let selectedTagId    = null;
+  let phraseInterval   = null;
+  let reidContext      = null;
 
   function open() { screen.classList.add('active'); }
   function close() {
     screen.classList.remove('active');
     pendingTags = [];
     pendingDataUrl = null;
+    pendingCaptureDate = null;
+    pendingFallbackDate = null;
     selectedTagId = null;
     reidContext = null;
     imgEl.src = '';
@@ -97,6 +102,15 @@ export function initReview() {
     const z = repo.zones.get(session.currentZoneId);
     showProcessing();
     try {
+      pendingCaptureDate = null;
+      pendingFallbackDate = null;
+
+      // Extract EXIF date and lastModified fallback for real files.
+      if (typeof fileOrDataUrl !== 'string') {
+        pendingFallbackDate = fileOrDataUrl.lastModified || Date.now();
+        pendingCaptureDate = await extractCaptureDate(fileOrDataUrl);
+      }
+
       const dataUrl = (typeof fileOrDataUrl === 'string')
         ? fileOrDataUrl
         : await processUpload(fileOrDataUrl);
@@ -110,7 +124,13 @@ export function initReview() {
     }
   }
 
-  async function handleDevPhoto() { return handlePhoto(DEV_TEST_IMAGE); }
+  async function handleDevPhoto() {
+    if (!DEV_TEST_IMAGE) {
+      events.emit(EV.TOAST, { msg: 'Dev image not available in this build', kind: 'error' });
+      return;
+    }
+    return handlePhoto(DEV_TEST_IMAGE);
+  }
 
   function handleAnalysisResult(dataUrl, result) {
     stopPhraseCycle();
@@ -152,6 +172,12 @@ export function initReview() {
     footerEl.style.display = '';
     acceptBtn.style.display = '';
     moreBtn.style.display = (overall >= CONF_HIGH) ? 'none' : '';
+
+    // Populate the date input with EXIF or fallback.
+    const dateInput = document.getElementById('reviewDateInput');
+    const capturedMs = pendingCaptureDate ?? pendingFallbackDate ?? Date.now();
+    dateInput.value = formatDatetimeLocal(capturedMs);
+    dateInput.max = formatDatetimeLocal(Date.now());
 
     renderMarkers();
     renderList();
@@ -308,9 +334,11 @@ export function initReview() {
         custom: !!t.custom,
       });
     });
+    const dateInput = document.getElementById('reviewDateInput');
+    const entryDate = parseDatetimeLocal(dateInput.value) ?? Date.now();
     repo.journal.append({
       zone_id: z.id,
-      entry_date: Date.now(),
+      entry_date: entryDate,
       photo_path: null,            // intentionally not persisting photo on backend (cost)
       vision_data: null,
       plant_count: accepted.length,
@@ -517,6 +545,27 @@ export function initReview() {
     const decided = reidContext.rejected.filter(r => r.choice).length;
     const total = reidContext.rejected.length;
     acceptBtn.textContent = decided < total ? `Finish (${decided}/${total})` : 'Finish';
+  }
+
+  // ── Date formatting helpers ──────────────────────────────────────
+  function formatDatetimeLocal(ms) {
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    const y = d.getFullYear();
+    const m = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const h = pad(d.getHours());
+    const min = pad(d.getMinutes());
+    return `${y}-${m}-${day}T${h}:${min}`;
+  }
+
+  function parseDatetimeLocal(str) {
+    // Parse "YYYY-MM-DDTHH:MM" to local-time epoch ms.
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    if (!match) return null;
+    const [, y, mo, d, h, min] = match.map(Number);
+    const date = new Date(y, mo - 1, d, h, min, 0);
+    return date.getTime();
   }
 
   // ── Wire up footer buttons ───────────────────────────────────────

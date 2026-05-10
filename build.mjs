@@ -3,7 +3,9 @@
 // produces a single self-contained dist/garden.html that runs by double-click
 // or by hosting from anywhere static.
 //
-// Usage:  node build.mjs
+// Usage:  node build.mjs [--artifact]
+//   --artifact: Strip embedded dev image, optimize for Claude.ai artifact paste.
+//               Output: dist/garden-artifact.html (~111 KB instead of ~648 KB).
 //
 // Design note: this is a deliberately small bundler tailored to *this*
 // codebase. It assumes:
@@ -18,11 +20,12 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
+const ARTIFACT_MODE = process.argv.includes('--artifact');
 const ENTRY    = 'src/main.js';
 const HTML_IN  = 'index.html';
 const CSS_IN   = 'styles/main.css';
 const OUT_DIR  = 'dist';
-const OUT_FILE = 'garden.html';
+const OUT_FILE = ARTIFACT_MODE ? 'garden-artifact.html' : 'garden.html';
 
 const IMPORT_RE     = /^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]\s*;?\s*$/gm;
 const EXPORT_DECL_RE = /^export\s+(const|let|function)\s+([A-Za-z_$][\w$]*)/gm;
@@ -35,7 +38,13 @@ function loadModule(id) {
   modules.set(id, null);   // placeholder to break any cycles
 
   const fullPath = resolve(ROOT, id);
-  const src = readFileSync(fullPath, 'utf8');
+  let src = readFileSync(fullPath, 'utf8');
+
+  // In artifact mode, stub out the dev test image to reduce bundle size.
+  if (ARTIFACT_MODE && id === 'src/assets/devTestImage.js') {
+    src = "export const DEV_TEST_IMAGE = '';";
+  }
+
   const deps = [];
 
   // Strip and capture imports.
@@ -110,4 +119,5 @@ const inlined = html
 mkdirSync(resolve(ROOT, OUT_DIR), { recursive: true });
 const outPath = resolve(ROOT, OUT_DIR, OUT_FILE);
 writeFileSync(outPath, inlined);
-console.log(`Built ${OUT_DIR}/${OUT_FILE}  (${(inlined.length / 1024).toFixed(0)} KB, ${order.length} modules)`);
+const mode = ARTIFACT_MODE ? ' [artifact mode]' : '';
+console.log(`Built ${OUT_DIR}/${OUT_FILE}${mode}  (${(inlined.length / 1024).toFixed(0)} KB, ${order.length} modules)`);
