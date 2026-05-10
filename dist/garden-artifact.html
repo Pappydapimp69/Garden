@@ -1975,7 +1975,7 @@ function cropFromImage(dataUrl, xPct, yPct) {
 //   3. Optionally proxy through a Supabase edge function so the key never
 //      leaves the device unencrypted.
 
-export async function visionRequest(messages) {
+async function visionRequest(messages) {
   const headers = { 'Content-Type': 'application/json' };
   // TODO: add auth when leaving the Claude.ai sandbox.
   // headers['x-api-key']         = await getApiKey();
@@ -2013,6 +2013,7 @@ function textBlock(text) {
   return { type: 'text', text };
 }
 
+  __mods["src/vision/client.js"].visionRequest = visionRequest;
   __mods["src/vision/client.js"].imageBlock = imageBlock;
   __mods["src/vision/client.js"].textBlock = textBlock;
 }
@@ -2024,7 +2025,7 @@ function textBlock(text) {
 
 // Full-photo analysis. Returns:
 //   { plants: [{ name, category, confidence, x, y, notes }], overall_confidence }
-export async function analyzeFullPhoto(dataUrl, zoneType, existingPlants = []) {
+async function analyzeFullPhoto(dataUrl, zoneType, existingPlants = []) {
   const existingNote = existingPlants.length
     ? `Previously confirmed plants in this zone: ${existingPlants.map(p => p.species || p.display_label || p.name).join(', ')}.`
     : '';
@@ -2049,7 +2050,7 @@ The "overall_confidence" represents how confident you are in the identification 
   }]);
 }
 
-
+  __mods["src/vision/analyze.js"].analyzeFullPhoto = analyzeFullPhoto;
 }
 
 // ── src/vision/reidentify.js ──
@@ -2059,7 +2060,7 @@ The "overall_confidence" represents how confident you are in the identification 
 
 // Batched re-ID for rejected plants. One API call, multiple cropped close-ups.
 // Returns: { crops: [{ index, candidates: [{ name, category, confidence }] }] }
-export async function reIdentifyBatch(crops, rejectedItems, zoneType, confirmedPlants) {
+async function reIdentifyBatch(crops, rejectedItems, zoneType, confirmedPlants) {
   const userContent = [];
   crops.forEach((cropDataUrl, i) => {
     userContent.push(imageBlock(cropDataUrl));
@@ -2083,7 +2084,7 @@ For each crop, return up to 3 alternative candidate names ranked by confidence. 
   return visionRequest([{ role: 'user', content: userContent }]);
 }
 
-
+  __mods["src/vision/reidentify.js"].reIdentifyBatch = reIdentifyBatch;
 }
 
 // ── src/assets/loadingPhrases.js ──
@@ -2130,7 +2131,7 @@ const DEV_TEST_IMAGE = '';
 // Returns null if EXIF is missing, unreadable, or the file is not a JPEG.
 // Never throws — all errors are caught and yield null.
 
-export async function extractCaptureDate(file) {
+async function extractCaptureDate(file) {
   try {
     const buffer = await file.arrayBuffer();
     const view = new DataView(buffer);
@@ -2304,7 +2305,7 @@ function parseExifDate(dateStr) {
   return ms;
 }
 
-
+  __mods["src/image/exif.js"].extractCaptureDate = extractCaptureDate;
 }
 
 // ── src/ui/review.js ──

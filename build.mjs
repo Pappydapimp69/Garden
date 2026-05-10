@@ -28,7 +28,7 @@ const OUT_DIR  = 'dist';
 const OUT_FILE = ARTIFACT_MODE ? 'garden-artifact.html' : 'garden.html';
 
 const IMPORT_RE     = /^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]\s*;?\s*$/gm;
-const EXPORT_DECL_RE = /^export\s+(const|let|function)\s+([A-Za-z_$][\w$]*)/gm;
+const EXPORT_DECL_RE = /^export\s+(const|let|function|async\s+function)\s+([A-Za-z_$][\w$]*)/gm;
 
 const modules = new Map();
 const order = [];
