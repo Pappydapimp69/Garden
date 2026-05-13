@@ -180,44 +180,40 @@ species explicitly.
 
 ## 5. Migration plan
 
-> Referenced by `src/data/supabaseRepo.js:9`.
+> Referenced by `src/data/supabaseRepo.js`.
 
 The local repo is a single-process synchronous façade over a JSON blob; the
-Supabase repo will be an async façade over Postgres + Storage + Auth. The
-plan is to keep the **interface** identical — the same method names returning
-the same shapes — so the UI swap is mechanical.
+Supabase repo is an async façade over Postgres + Auth. The interface is
+identical — the same method names returning the same shapes — so the UI
+swap is mechanical.
 
-### Step 1 — make the interface async-ready
-Today every call site (UI module) treats `repo.X.create(...)` as
-synchronous. Audit the call sites — they're concentrated in:
+### Step 1 — async-ready interface  *(implemented)*
+Reads stay synchronous from an in-memory cache that both repos hydrate at
+`init()`; writes (`create`, `update`, `delete`, `softDelete`, `append`,
+`set`, `ensureDefault`) are async. Boot in `src/main.js` runs inside an
+async IIFE that awaits `repo.init()` before any UI renders.
 
-- `src/ui/overview.js` (zone list render)
-- `src/ui/zone.js` (map/plants/journal tabs)
-- `src/ui/review.js` (photo upload commit + re-ID)
-- `src/ui/zoneDialog.js`, `src/ui/plantDialog.js` (dialog confirms)
-- `src/main.js` (FAB → new zone)
+Per-pixel writes during tag-drag in `src/ui/zone.js` were collapsed to a
+single write on drop — local case is microtask churn, Supabase would have
+been one HTTP request per pointermove.
 
-For each, the existing flow already passes results through state-changing
-events. Adding `await` at those call sites is safe and won't reorder
-observable effects. Do this first, then ship; the localRepo still works
-because async functions wrapping sync ops just yield a microtask.
+### Step 2 — Supabase schema  *(implemented)*
+See `supabase/migrations/0001_initial_schema.sql`. One table per object in
+[§3 Data model](#3-data-model), foreign keys + `ON DELETE CASCADE` so
+deleting a zone removes its plants and journal entries server-side.
 
-### Step 2 — create the Supabase schema
-One table per object in [§3 Data model](#3-data-model). Field names and types
-are already chosen to match Postgres conventions (snake_case, epoch for time,
-explicit nullables). Add per-table RLS:
+RLS chains ownership: `users → gardens → zones → (plants | journal_entries
+| sub_zones)`, with `vision_feedback` reached via `plants`. Every policy
+is `for all using (...) with check (...)` so a user can only touch rows
+that resolve back to their `auth.uid()`. An `auth.users` insert trigger
+provisions the `public.users` row so first repo.init() finds a real row.
 
-- `select` / `insert` / `update` / `delete` on rows where
-  `user_id = auth.uid()`, or a foreign chain that resolves there.
-- `journal_entries.contributes_to_global = true` becomes the gate that lets
-  rows be aggregated into a global, anonymized table.
-
-### Step 3 — implement `createSupabaseRepo`
-`src/data/supabaseRepo.js` currently throws. Replace its body with a
-`supabase-js` client and per-table methods that mirror `createLocalRepo`. The
-`raw()` and `save()` escape hatches go away — there is no in-memory blob to
-return — so the few call sites using them (debug / migration code paths)
-need a different solution.
+### Step 3 — implement `createSupabaseRepo`  *(implemented)*
+See `src/data/supabaseRepo.js`. Hits the PostgREST endpoint directly over
+`fetch`, no `supabase-js` dependency (build.mjs stays zero-dep). Same
+read-sync / write-async shape as localRepo. Takes
+`{ url, anonKey, accessToken, userId }`; without an accessToken every
+request is anonymous and RLS will reject anything beyond public selects.
 
 ### Step 4 — swap the export
 In `src/data/repo.js`:
@@ -226,22 +222,20 @@ In `src/data/repo.js`:
 // from:
 export const repo = createLocalRepo();
 // to:
-export const repo = createSupabaseRepo({ url, anonKey });
+import { createSupabaseRepo } from './supabaseRepo.js';
+export const repo = createSupabaseRepo({ url, anonKey, accessToken, userId });
 ```
 
 `url` / `anonKey` come from `config.js` (env-baked at build time) or from a
-runtime config endpoint. Local-only deploys keep using `createLocalRepo`.
+runtime config endpoint. `accessToken` and `userId` come from an auth flow
+not yet wired into the UI. Local-only deploys keep using `createLocalRepo`.
 
-### Step 5 — one-shot migration of existing local data
-On first Supabase load, if `localStorage[STORAGE_KEY]` exists, push every
-row into the matching table and then clear the local copy (or keep it as a
-read-only backup behind a flag). This is a separate `migrateLocalToSupabase`
-function — not part of the repo interface.
-
-### Why not just do steps 2–5 first
-Steps 2+ are blocked on a real Supabase project, secrets, and an auth flow.
-Step 1 is purely local and unlocks the ability to ship the migration in
-small slices.
+### Step 5 — one-shot local→remote migration  *(implemented)*
+See `src/data/migrateLocalToSupabase.js`. Walks the local repo's in-memory
+DB and pushes every row through the Supabase repo's async create methods.
+Rewrites `zone_id` foreign keys through a local→remote id map because
+Supabase generates new ids on insert. Doesn't touch storage itself — the
+caller decides whether to wipe the local copy or keep it as a backup.
 
 ---
 
@@ -293,23 +287,25 @@ Three options for getting that header, in order of increasing security:
    the key never enters the browser process.
 
 Option (3) is the destination. (2) is the bridge for users who don't want to
-stand up a Supabase project.
+stand up a Supabase project, **and is implemented today** in
+`src/state/apiKey.js`.
 
-Concretely, `visionRequest` in `src/vision/client.js` needs:
+The on-disk envelope:
 
-```js
-const headers = { 'Content-Type': 'application/json' };
-const key = await getApiKey();   // strategies above
-if (key) {
-  headers['x-api-key']         = key;
-  headers['anthropic-version'] = '2023-06-01';
-  headers['anthropic-dangerous-direct-browser-access'] = 'true';
-}
+```json
+{ "v": 1, "salt": "<b64>", "iv": "<b64>", "ct": "<b64>", "hint": "<last4>" }
 ```
 
-`getApiKey()` is the seam. It returns null inside the artifact sandbox (let
-the host's proxy handle it), the decrypted key in option (2), or a JWT
-exchange result in option (3).
+PBKDF2-SHA256 with 250k iterations derives a 256-bit AES-GCM key from the
+user's passphrase; salt is 16 random bytes, iv is 12. AES-GCM's auth tag
+means a wrong passphrase throws on decrypt instead of returning garbage.
+The cleartext is held in a module-level closure (never on `window`) and
+cleared by `lock()` or `clearApiKey()`.
+
+`visionRequest` in `src/vision/client.js` calls `getApiKey()` — null inside
+the artifact sandbox (let the host's proxy handle it), the decrypted key
+once the user has unlocked it via `unlock(passphrase)`. The UI for entering
+the passphrase isn't built yet — that's a settings-screen TODO.
 
 ---
 
