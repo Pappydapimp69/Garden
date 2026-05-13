@@ -5,7 +5,7 @@ export function xpForLevel(level) {
   return Math.round(50 * Math.pow(level, 1.4));
 }
 
-export function awardXP(amount, reason) {
+export async function awardXP(amount, reason) {
   let { xp, level } = repo.progress.get();
   xp += amount;
   let leveled = false;
@@ -14,7 +14,7 @@ export function awardXP(amount, reason) {
     level++;
     leveled = true;
   }
-  repo.progress.set({ xp, level });
+  await repo.progress.set({ xp, level });
   events.emit(EV.PROGRESS_CHANGED, { xp, level, leveled, amount, reason });
   if (leveled) {
     events.emit(EV.TOAST, { msg: `Level up! Vision is now Lv ${level}`, kind: 'xp' });

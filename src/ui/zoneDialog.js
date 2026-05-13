@@ -44,24 +44,24 @@ export function initZoneDialog({ onAfterDelete }) {
   cancel.addEventListener('click', close);
   dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
-  confirm.addEventListener('click', () => {
+  confirm.addEventListener('click', async () => {
     const name = nameInp.value.trim();
     if (!name) { events.emit(EV.TOAST, { msg: 'Please enter a name' }); return; }
     if (session.pendingZoneId) {
-      repo.zones.update(session.pendingZoneId, { name, type: typeInp.value });
+      await repo.zones.update(session.pendingZoneId, { name, type: typeInp.value });
     } else {
-      repo.zones.create({ name, type: typeInp.value });
-      awardXP(5, 'New zone created');
+      await repo.zones.create({ name, type: typeInp.value });
+      await awardXP(5, 'New zone created');
     }
     events.emit(EV.ZONES_CHANGED);
     close();
   });
 
-  del.addEventListener('click', () => {
+  del.addEventListener('click', async () => {
     if (!session.pendingZoneId) return;
     if (del.dataset.confirming === '1') {
       const id = session.pendingZoneId;
-      repo.zones.delete(id);
+      await repo.zones.delete(id);
       delete del.dataset.confirming;
       del.textContent = 'Delete';
       close();

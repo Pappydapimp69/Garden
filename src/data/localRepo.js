@@ -1,8 +1,14 @@
 import { STORAGE_KEY, STORAGE_KEY_V1 } from '../config.js';
 import { emptyDB, migrateFromV1, newId } from './schema.js';
 
+// Async-write / sync-read repo. Reads serve from an in-memory cache that's
+// hydrated by init(); writes mutate the cache and persist to localStorage.
+// supabaseRepo follows the same shape, so UI code is portable between them
+// — see BLUEPRINT.md §5 step 1.
+
 export function createLocalRepo() {
-  let db = load();
+  let db = emptyDB();
+  let initialized = false;
 
   function load() {
     // Prefer v2 if it exists; otherwise migrate from v1; otherwise start fresh.
@@ -42,7 +48,7 @@ export function createLocalRepo() {
     catch (e) { console.warn('Could not save DB', e); throw e; }
   }
 
-  function ensureDefaultGarden() {
+  function ensureDefaultGardenSync() {
     if (db.gardens.length > 0) return db.gardens[0];
     const g = { id: newId('g'), user_id: null, name: 'My Garden', created_at: Date.now() };
     db.gardens.push(g);
@@ -51,27 +57,33 @@ export function createLocalRepo() {
   }
 
   return {
+    async init() {
+      if (initialized) return;
+      db = load();
+      initialized = true;
+    },
+
     raw: () => db,
     save,
     newId,
 
     user: {
       get: () => db.user,
-      update: (patch) => { db.user = { ...db.user, ...patch }; save(); return db.user; },
+      update: async (patch) => { db.user = { ...db.user, ...patch }; save(); return db.user; },
     },
 
     gardens: {
       list:    () => db.gardens.slice(),
       get:     (id) => db.gardens.find(g => g.id === id),
-      ensureDefault: ensureDefaultGarden,
+      ensureDefault: async () => ensureDefaultGardenSync(),
     },
 
     zones: {
       list: () => db.zones.slice(),
       listByGarden: (gardenId) => db.zones.filter(z => z.garden_id === gardenId),
       get: (id) => db.zones.find(z => z.id === id),
-      create: ({ name, type, reference_image_path = null }) => {
-        const garden = ensureDefaultGarden();
+      create: async ({ name, type, reference_image_path = null }) => {
+        const garden = ensureDefaultGardenSync();
         const z = {
           id: newId('z'),
           garden_id: garden.id,
@@ -84,14 +96,14 @@ export function createLocalRepo() {
         save();
         return z;
       },
-      update: (id, patch) => {
+      update: async (id, patch) => {
         const z = db.zones.find(zz => zz.id === id);
         if (!z) return null;
         Object.assign(z, patch);
         save();
         return z;
       },
-      delete: (id) => {
+      delete: async (id) => {
         db.zones = db.zones.filter(z => z.id !== id);
         db.plants = db.plants.filter(p => p.zone_id !== id);
         db.journal_entries = db.journal_entries.filter(j => j.zone_id !== id);
@@ -105,7 +117,7 @@ export function createLocalRepo() {
         return includeDeleted ? ps : ps.filter(p => !p.deleted);
       },
       get: (id) => db.plants.find(p => p.id === id),
-      create: (plant) => {
+      create: async (plant) => {
         const p = {
           id: plant.id || newId('p'),
           zone_id: plant.zone_id,
@@ -129,7 +141,7 @@ export function createLocalRepo() {
         save();
         return p;
       },
-      update: (id, patch) => {
+      update: async (id, patch) => {
         const p = db.plants.find(pp => pp.id === id);
         if (!p) return null;
         Object.assign(p, patch);
@@ -137,7 +149,7 @@ export function createLocalRepo() {
         save();
         return p;
       },
-      softDelete: (id) => {
+      softDelete: async (id) => {
         const p = db.plants.find(pp => pp.id === id);
         if (p) { p.deleted = true; save(); }
       },
@@ -145,7 +157,7 @@ export function createLocalRepo() {
 
     journal: {
       listByZone: (zoneId) => db.journal_entries.filter(j => j.zone_id === zoneId),
-      append: (entry) => {
+      append: async (entry) => {
         const j = {
           id: entry.id || newId('j'),
           zone_id: entry.zone_id,
@@ -166,7 +178,7 @@ export function createLocalRepo() {
 
     progress: {
       get: () => ({ xp: db.xp, level: db.level }),
-      set: ({ xp, level }) => { db.xp = xp; db.level = level; save(); },
+      set: async ({ xp, level }) => { db.xp = xp; db.level = level; save(); },
     },
   };
 }

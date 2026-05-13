@@ -15,6 +15,7 @@ export const session = {
   singleTapTimer: null,
   pressStart: null,
   pressTagId: null,
+  dragPos: null,                     // latest pct during tag-drag; persisted once on drop
   panStart: null,
   activePointers: new Map(),
   pinchStart: null,

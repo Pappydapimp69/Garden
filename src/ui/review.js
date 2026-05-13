@@ -314,14 +314,14 @@ export function initReview() {
   }
 
   // ── Commit accepted tags as plants + journal entry ───────────────
-  function commitTagsToZone(zoneId, accepted) {
+  async function commitTagsToZone(zoneId, accepted) {
     const z = repo.zones.get(zoneId);
     if (!z) return;
     if (!z.reference_image_path) {
-      repo.zones.update(z.id, { reference_image_path: pendingDataUrl });
+      await repo.zones.update(z.id, { reference_image_path: pendingDataUrl });
     }
-    accepted.forEach(t => {
-      repo.plants.create({
+    for (const t of accepted) {
+      await repo.plants.create({
         id: t.id,
         zone_id: z.id,
         display_label: t.name || 'Unknown',
@@ -333,10 +333,10 @@ export function initReview() {
         pending: !!t.pending,
         custom: !!t.custom,
       });
-    });
+    }
     const dateInput = document.getElementById('reviewDateInput');
     const entryDate = parseDatetimeLocal(dateInput.value) ?? Date.now();
-    repo.journal.append({
+    await repo.journal.append({
       zone_id: z.id,
       entry_date: entryDate,
       photo_path: null,            // intentionally not persisting photo on backend (cost)
@@ -345,7 +345,7 @@ export function initReview() {
       overall_health_note: `${accepted.length} plants tagged from photo`,
     });
 
-    awardXP(10 + accepted.length * 2, `Photo analyzed (${accepted.length} plants)`);
+    await awardXP(10 + accepted.length * 2, `Photo analyzed (${accepted.length} plants)`);
     events.emit(EV.PLANTS_CHANGED,  { zoneId: z.id });
     events.emit(EV.JOURNAL_CHANGED, { zoneId: z.id });
     events.emit(EV.ZONES_CHANGED);  // thumb may have changed
@@ -511,7 +511,7 @@ export function initReview() {
     });
 
     updateReIDFinishLabel();
-    acceptBtn.onclick = () => {
+    acceptBtn.onclick = async () => {
       const finalAccepted = [...reidContext.accepted];
       reidContext.rejected.forEach(r => {
         if (!r.choice || r.choice === 'skip') return;
@@ -534,7 +534,7 @@ export function initReview() {
           pending: false,
         });
       });
-      commitTagsToZone(reidContext.zoneId, finalAccepted);
+      await commitTagsToZone(reidContext.zoneId, finalAccepted);
       acceptBtn.onclick = null;
       acceptBtn.textContent = 'Accept';
     };
@@ -588,7 +588,7 @@ export function initReview() {
     if (rejected.length > 0) {
       await startReIDFlow(session.currentZoneId, accepted, rejected);
     } else {
-      commitTagsToZone(session.currentZoneId, accepted);
+      await commitTagsToZone(session.currentZoneId, accepted);
     }
   });
 

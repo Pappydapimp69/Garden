@@ -46,20 +46,20 @@ export function initPlantDialog() {
   cancel.addEventListener('click', close);
   dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
-  confirm.addEventListener('click', () => {
+  confirm.addEventListener('click', async () => {
     const nameVal = name.value.trim() || 'Unknown Plant';
     const catVal  = cat.value;
     const notesVal = notes.value.trim();
 
     if (session.editingPlantId) {
-      repo.plants.update(session.editingPlantId, {
+      await repo.plants.update(session.editingPlantId, {
         display_label: nameVal,
         species: nameVal,
         category: catVal,
         notes: notesVal,
       });
     } else if (session.pendingPos && session.currentZoneId) {
-      repo.plants.create({
+      await repo.plants.create({
         zone_id: session.currentZoneId,
         display_label: nameVal,
         species: nameVal,
@@ -69,16 +69,16 @@ export function initPlantDialog() {
         y: session.pendingPos.y,
         custom: true,
       });
-      awardXP(2, 'Manual tag added');
+      await awardXP(2, 'Manual tag added');
     }
 
     close();
     events.emit(EV.PLANTS_CHANGED, { zoneId: session.currentZoneId });
   });
 
-  del.addEventListener('click', () => {
+  del.addEventListener('click', async () => {
     if (!session.editingPlantId) return;
-    repo.plants.softDelete(session.editingPlantId);
+    await repo.plants.softDelete(session.editingPlantId);
     close();
     events.emit(EV.PLANTS_CHANGED, { zoneId: session.currentZoneId });
   });

@@ -13,6 +13,11 @@ import { initZone } from './ui/zone.js';
 import { initOverview, showOverview as showOverviewScreen } from './ui/overview.js';
 import { initReview } from './ui/review.js';
 
+// Boot in an async IIFE so we can await repo.init() before any UI renders.
+// (Bundler doesn't support top-level await.)
+(async () => {
+await repo.init();
+
 initToast();
 
 const carePanel  = initCarePanel();
@@ -56,11 +61,11 @@ photoInputNewZone.addEventListener('change', async (e) => {
     if (!file) return;
     events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
 
-    const z = repo.zones.create({
+    const z = await repo.zones.create({
       name: `Zone ${repo.zones.list().length + 1}`,
       type: 'bed',
     });
-    awardXP(5, 'New zone created');
+    await awardXP(5, 'New zone created');
     events.emit(EV.ZONES_CHANGED);
     zoneScreen.show(z.id);
     await review.handlePhoto(file);
@@ -74,11 +79,11 @@ const overview = initOverview({
   onZoneOpen: (zoneId) => zoneScreen.show(zoneId),
   onUploadForNewZone: () => { /* label opens picker natively — nothing to do here */ },
   onDevCreateZone: async () => {
-    const z = repo.zones.create({
+    const z = await repo.zones.create({
       name: `Zone ${repo.zones.list().length + 1}`,
       type: 'patio',
     });
-    awardXP(5, 'New zone created (dev test)');
+    await awardXP(5, 'New zone created (dev test)');
     events.emit(EV.ZONES_CHANGED);
     zoneScreen.show(z.id);
     await review.handleDevPhoto();
@@ -135,3 +140,9 @@ events.on('care:close', () => carePanel.close());
 // Initial render.
 overview.renderZoneList();
 overview.renderLevel();
+
+})().catch(err => {
+  console.error('Boot failed:', err);
+  const toast = document.getElementById('toast');
+  if (toast) { toast.textContent = 'Boot failed: ' + (err?.message || err); toast.className = 'toast show error'; }
+});

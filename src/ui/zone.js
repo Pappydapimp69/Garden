@@ -293,7 +293,7 @@ export function initZone({ onPlantTap, onPlantDoubleTap, onPlantLongPressDone, o
     }
     if (session.mode === 'tag-drag') {
       const pct = clientToImagePct(e.clientX, e.clientY);
-      repo.plants.update(session.pressTagId, { x: pct.x, y: pct.y });
+      session.dragPos = pct;
       const el = document.querySelector(`.marker[data-id="${session.pressTagId}"]`);
       if (el) { el.style.left = pct.x + '%'; el.style.top = pct.y + '%'; }
       return;
@@ -340,7 +340,6 @@ export function initZone({ onPlantTap, onPlantDoubleTap, onPlantLongPressDone, o
     }
     if (session.mode === 'tag-drag') {
       finishTagDrag();
-      // repo.plants.update already saved on each move; nothing else to persist here.
       return;
     }
     if (session.mode === 'tag-press') {
@@ -457,13 +456,22 @@ export function initZone({ onPlantTap, onPlantDoubleTap, onPlantLongPressDone, o
   }
 
   function finishTagDrag() {
-    if (session.pressTagId !== null) {
-      const el = document.querySelector(`.marker[data-id="${session.pressTagId}"]`);
+    const draggedId = session.pressTagId;
+    const finalPos = session.dragPos;
+    if (draggedId !== null) {
+      const el = document.querySelector(`.marker[data-id="${draggedId}"]`);
       if (el) el.classList.remove('dragging');
     }
     session.mode = 'idle';
     session.pressTagId = null;
     session.pressStart = null;
+    session.dragPos = null;
+    // Persist the final position once. Fire-and-forget — DOM already reflects it
+    // and the next render reads from the in-memory cache anyway.
+    if (draggedId !== null && finalPos) {
+      repo.plants.update(draggedId, { x: finalPos.x, y: finalPos.y })
+        .catch(err => console.error('Drag persist failed', err));
+    }
   }
 
   function cancelAllTimers() {
