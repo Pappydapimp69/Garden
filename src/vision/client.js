@@ -1,21 +1,25 @@
 import { VISION_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS } from '../config.js';
+import { getApiKey } from '../state/apiKey.js';
 
-// Single seam for the Anthropic Messages API. Today the call goes direct from
-// the browser with no auth header — that only works inside the Claude.ai
-// artifact preview, which proxies the request. When wiring in real auth:
+// Single seam for the Anthropic Messages API. Two operating modes:
 //
-//   1. Add a `getApiKey()` strategy (encrypted in localStorage, decrypted with
-//      a session password — see BLUEPRINT.md "Storage Strategy").
-//   2. Inject the headers below.
-//   3. Optionally proxy through a Supabase edge function so the key never
-//      leaves the device unencrypted.
+//   1. Inside the Claude.ai artifact preview — the host proxies our request,
+//      so we omit auth headers entirely. This is the current default.
+//   2. Outside the sandbox — the user has unlocked an encrypted API key (see
+//      src/state/apiKey.js, BLUEPRINT.md §6). We attach x-api-key,
+//      anthropic-version, and the direct-browser-access header.
+//
+// A future third mode (Supabase edge-function proxy) replaces VISION_ENDPOINT
+// with /api/vision/* and drops the api-key header entirely.
 
 export async function visionRequest(messages) {
   const headers = { 'Content-Type': 'application/json' };
-  // TODO: add auth when leaving the Claude.ai sandbox.
-  // headers['x-api-key']         = await getApiKey();
-  // headers['anthropic-version'] = '2023-06-01';
-  // headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  const key = getApiKey();
+  if (key) {
+    headers['x-api-key']         = key;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
 
   const resp = await fetch(VISION_ENDPOINT, {
     method: 'POST',
