@@ -14,6 +14,7 @@ export function emptyDB() {
       created_at: null,
       zip_code: null,
       zip_source: 'none',
+      region_label: null,
       share_data_globally: true,
       api_key_hint: null,
       trust_score: null,

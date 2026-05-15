@@ -1,4 +1,5 @@
 import { visionRequest, imageBlock, textBlock } from './client.js';
+import { regionPhrase } from './regionPrompt.js';
 
 // Batched re-ID for rejected plants. One API call, multiple cropped close-ups.
 // Returns: { crops: [{ index, candidates: [{ name, category, confidence }] }] }
@@ -14,8 +15,10 @@ export async function reIdentifyBatch(crops, rejectedItems, zoneType, confirmedP
     : '';
   const rejectedNames = [...new Set(rejectedItems.map(r => r.name))];
   const rejNote = `The user rejected these previous labels: ${rejectedNames.join(', ')}. For each crop, your new candidates MUST exclude the corresponding rejected label, and avoid all the user's rejected labels overall unless visually unmistakable.`;
+  const region = regionPhrase();
+  const regionPart = region ? ' ' + region : '';
 
-  userContent.push(textBlock(`These are ${crops.length} cropped close-ups from a top-down photo of a ${zoneType.replace('_',' ')} in a Texas (zone 7b/8a) backyard garden. The user rejected the previous identifications. Re-identify the plant in the center of each crop.
+  userContent.push(textBlock(`These are ${crops.length} cropped close-ups from a top-down photo of a ${zoneType.replace('_',' ')} backyard garden${regionPart}. The user rejected the previous identifications. Re-identify the plant in the center of each crop.
 
 ${confirmedNote}
 ${rejNote}

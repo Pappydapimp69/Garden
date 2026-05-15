@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // Zero-dependency bundler. Reads index.html + every ES module under src/,
-// produces a single self-contained dist/garden.html that runs by double-click
-// or by hosting from anywhere static.
+// produces a single self-contained HTML that runs by double-click or by
+// hosting from anywhere static.
 //
 // Usage:  node build.mjs [--artifact]
-//   --artifact: Strip embedded dev image, optimize for Claude.ai artifact paste.
-//               Output: dist/garden-artifact.html (~111 KB instead of ~648 KB).
+//   default:    Output dist/garden.html (full bundle, JSON-shaped literals).
+//   --artifact: Output artifact/garden.html. Strips the embedded dev image
+//               and TOON-encodes specific assets so the pasted artifact
+//               carries fewer tokens. Runtime still uses JSON; the decoder
+//               in src/data/toonDecode.js rehydrates the literals on boot.
 //
 // Design note: this is a deliberately small bundler tailored to *this*
 // codebase. It assumes:
@@ -24,11 +27,31 @@ const ARTIFACT_MODE = process.argv.includes('--artifact');
 const ENTRY    = 'src/main.js';
 const HTML_IN  = 'index.html';
 const CSS_IN   = 'styles/main.css';
-const OUT_DIR  = 'dist';
-const OUT_FILE = ARTIFACT_MODE ? 'garden-artifact.html' : 'garden.html';
+const OUT_DIR  = ARTIFACT_MODE ? 'artifact' : 'dist';
+const OUT_FILE = 'garden.html';
 
 const IMPORT_RE     = /^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]\s*;?\s*$/gm;
 const EXPORT_DECL_RE = /^export\s+(const|let|function|async\s+function)\s+([A-Za-z_$][\w$]*)/gm;
+const STRING_LIST_RE = /^const\s+([A-Z_][A-Z0-9_]*)\s*=\s*\[\s*((?:'[^'\n]*'\s*,?\s*)+)\];?\s*$/gm;
+
+// Rewrite top-level `const FOO = ['a','b',...];` literals into
+// `const FOO = decodeStringList('a,b,...');` and prepend an import of the
+// decoder. The decoder lives in src/data/toonDecode.js. Used only by the
+// artifact build to shave per-item quotes off long string arrays.
+function toonifyStringLists(src) {
+  let hadMatch = false;
+  const rewritten = src.replace(STRING_LIST_RE, (_m, name, items) => {
+    hadMatch = true;
+    const values = [...items.matchAll(/'([^'\n]*)'/g)].map(m => m[1]);
+    if (values.some(v => v.includes(','))) {
+      // Bail on this list — a value contains the delimiter; emit it unchanged.
+      return _m;
+    }
+    return `const ${name} = decodeStringList(${JSON.stringify(values.join(','))});`;
+  });
+  if (!hadMatch) return src;
+  return `import { decodeStringList } from '../data/toonDecode.js';\n${rewritten}`;
+}
 
 const modules = new Map();
 const order = [];
@@ -43,6 +66,14 @@ function loadModule(id) {
   // In artifact mode, stub out the dev test image to reduce bundle size.
   if (ARTIFACT_MODE && id === 'src/assets/devTestImage.js') {
     src = "export const DEV_TEST_IMAGE = '';";
+  }
+
+  // In artifact mode, swap fixed string-list assets to TOON-encoded form +
+  // a runtime decoder, so the inline JS carries fewer per-item quotes.
+  // Currently this only covers loadingPhrases.js — the careDb went away
+  // entirely. Add new substitutions here as further large literals appear.
+  if (ARTIFACT_MODE && id === 'src/assets/loadingPhrases.js') {
+    src = toonifyStringLists(src);
   }
 
   const deps = [];

@@ -1,4 +1,5 @@
 import { visionRequest, imageBlock, textBlock } from './client.js';
+import { regionPhrase } from './regionPrompt.js';
 
 // Full-photo analysis. Returns:
 //   { plants: [{ name, category, confidence, x, y, notes }], overall_confidence }
@@ -6,8 +7,10 @@ export async function analyzeFullPhoto(dataUrl, zoneType, existingPlants = []) {
   const existingNote = existingPlants.length
     ? `Previously confirmed plants in this zone: ${existingPlants.map(p => p.species || p.display_label || p.name).join(', ')}.`
     : '';
+  const region = regionPhrase();
+  const regionPart = region ? ' ' + region : '';
 
-  const prompt = `You are a plant identification assistant analyzing a top-down photo of a ${zoneType.replace('_',' ')} in a backyard garden in Texas (zone 7b/8a). ${existingNote}
+  const prompt = `You are a plant identification assistant analyzing a top-down photo of a ${zoneType.replace('_',' ')} in a backyard garden${regionPart}. ${existingNote}
 
 Identify each plant visible in the image. For each plant, provide:
 - name (common species name)

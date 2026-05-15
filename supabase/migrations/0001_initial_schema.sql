@@ -16,6 +16,7 @@ create table public.users (
   created_at            bigint not null default (extract(epoch from now()) * 1000)::bigint,
   zip_code              text,
   zip_source            text not null default 'none' check (zip_source in ('none','manual','geo')),
+  region_label          text,
   share_data_globally   boolean not null default true,
   api_key_hint          text,
   trust_score           numeric,

@@ -70,8 +70,9 @@ One row. Tracks identity and global-share consent.
 | `id`                   | string  | null until Supabase auth is wired              |
 | `email`                | string  | null until Supabase auth is wired              |
 | `created_at`           | epoch   |                                                |
-| `zip_code`             | string  | for future climate-zone lookups                |
+| `zip_code`             | string  | spliced into vision prompts when no `region_label` |
 | `zip_source`           | enum    | `'none' \| 'manual' \| 'geo'`                  |
+| `region_label`         | string  | free-form override, e.g. "Central Texas, zone 8a" |
 | `share_data_globally`  | bool    | governs whether journal entries leave device   |
 | `api_key_hint`         | string  | last 4 chars of stored Anthropic key, for UI   |
 | `trust_score`          | number  | future: weight a user's corrections in aggregate |
@@ -315,22 +316,31 @@ the passphrase isn't built yet — that's a settings-screen TODO.
 header for the assumptions it makes (all static named imports, no dynamic
 import, no top-level await — don't extend it without revisiting these).
 
-Two output modes:
+Two output modes, written to clearly-separated directories so a build
+artifact is never confused with a release artifact:
 
-- `node build.mjs` → `dist/garden.html` (full bundle, includes dev test image)
-- `node build.mjs --artifact` → `dist/garden-artifact.html` (dev image
-  stubbed; ~111 KB; optimized for paste-into-Claude.ai-artifact)
+- `node build.mjs` → `dist/garden.html` (full bundle, JSON-shaped data
+  literals, includes the dev test image)
+- `node build.mjs --artifact` → `artifact/garden.html` (dev image stubbed;
+  flagged string-list literals rewritten to TOON-encoded form decoded by
+  `src/data/toonDecode.js` at boot; optimized for paste-into-Claude.ai-artifact)
 
 The artifact mode exists because Claude.ai's artifact host enforces a size
 ceiling and won't proxy requests for files larger than a certain threshold.
 The dev image is the heaviest single asset, so stripping it is the cheapest
-way to fit.
+way to fit. TOON encoding is the second lever: it shaves per-item quote
+characters off long string arrays without changing the runtime data shape
+(the decoder rehydrates them on app boot).
+
+Rule: the on-disk shape of the artifact may differ from the dist (today,
+TOON literals), but the runtime data model stays JSON-shaped — `repo`,
+state, vision payloads all match between builds.
 
 ---
 
 ## 8. Vision pipeline
 
-Two calls, both hitting Anthropic Messages API via `src/vision/client.js`:
+Three calls, all hitting Anthropic Messages API via `src/vision/client.js`:
 
 1. **`analyzeFullPhoto`** (`src/vision/analyze.js`) — full reference photo +
    list of already-confirmed species in this zone. Returns plant tags with
@@ -340,11 +350,23 @@ Two calls, both hitting Anthropic Messages API via `src/vision/client.js`:
    one or more tags, we crop a `REID_CROP_PCT`-sized square centered on each
    rejected tag and ship all crops in a single message, with the rejected
    labels as negative constraints. Returns up to 3 candidates per crop.
+3. **`fetchCareAdvice`** (`src/vision/careAdvice.js`) — on-demand, per-plant
+   care advice. Sends the zone's most recent reference photo (if any) plus
+   a summary of the plant's last 3–5 journal entries, so the model can
+   spot problems instead of giving generic tips. Cached per-plant in
+   localStorage via `src/care/careCache.js`. User triggers it deliberately
+   from the care panel — never automatic — and can hit "Refresh" to re-run
+   against the current image and journal.
 
-The review screen (`src/ui/review.js`) is the single owner of this flow. It
-also owns the user-facing date selection (EXIF capture date with
-lastModified fallback, user-editable), which gates `entry_date` on the
-resulting journal entry.
+All three prompts splice in a region phrase from `src/vision/regionPrompt.js`
+which reads `user.region_label` (preferred) or `user.zip_code`. With both
+unset the phrase is empty and the prompt falls back to generic "a backyard
+garden" wording — no Texas assumption.
+
+The review screen (`src/ui/review.js`) owns the analyze + re-ID flow and
+the user-facing date selection (EXIF capture date with lastModified
+fallback, user-editable), which gates `entry_date` on the resulting journal
+entry. The care panel (`src/ui/carePanel.js`) owns the care-advice flow.
 
 The model + endpoint are pinned in `src/config.js` (`VISION_MODEL`,
 `VISION_ENDPOINT`). Migration to a Supabase edge proxy means changing
@@ -381,9 +403,11 @@ These are things the current code is shaped to allow but doesn't yet do:
   the rejected-tags-in-one-photo case.
 - **Global aggregation** — `journal_entries.contributes_to_global` is the
   gate. Needs an anonymized rollup table and an ingestion job.
-- **Climate-zone-aware care tips** — `user.zip_code` is captured but unused;
-  `src/care/careDb.js` is hardcoded to Texas zone 7b/8a. Either parameterize
-  the lookup or ship per-zone DBs.
+- **Settings UI for user region** — the plumbing is in place
+  (`user.region_label`, `user.zip_code`, all three vision prompts read
+  them via `src/vision/regionPrompt.js`), but there's no UI to set them.
+  Today the user has to poke `repo.raw().user.region_label = '...'` from
+  devtools.
 - **Trust scoring** — `user.trust_score` + `vision_feedback.user_score`
   exist as columns. Mechanism doesn't.
 - **Multi-garden UI** — schema supports it, UI assumes one.

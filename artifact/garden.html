@@ -536,6 +536,7 @@ function emptyDB() {
       created_at: null,
       zip_code: null,
       zip_source: 'none',
+      region_label: null,
       share_data_globally: true,
       api_key_hint: null,
       trust_score: null,
@@ -1002,38 +1003,324 @@ function initToast() {
   __mods["src/ui/toast.js"].initToast = initToast;
 }
 
-// ── src/care/careDb.js ──
+// ── src/state/apiKey.js ──
 {
-  __mods["src/care/careDb.js"] = {};
+  __mods["src/state/apiKey.js"] = {};
 
-// Hardcoded care info. Eventually this could be a queryable table, but for v1
-// it's a static lookup with substring fallback.
+// Anthropic API key storage. See BLUEPRINT.md §6 (Storage strategy).
+//
+// Strategy: encrypt at rest with a user-chosen passphrase, decrypt once per
+// session and keep the cleartext in a closure (never on `window`).
+//
+// Layout in localStorage (keyed by API_KEY_STORAGE):
+//   { v: 1, salt: <b64>, iv: <b64>, ct: <b64>, hint: <last4> }
+//
+//   v     — format version, bump on schema change
+//   salt  — 16 random bytes, PBKDF2 input
+//   iv    — 12 random bytes, AES-GCM input
+//   ct    — AES-GCM-encrypted UTF-8 of the API key
+//   hint  — last 4 chars of the plaintext key, for UI ("ends in …xyz")
+//
+// PBKDF2-SHA256, 250k iterations. AES-GCM-256.
 
-const CARE_DB = {
-  'squash':{sun:'Full sun',water:'Deep water 1–2x/week; keep soil consistently moist.',soil:'Rich, well-draining soil with compost; pH 6.0–6.8.',spacing:'24–36 inches apart',harvest:'50–65 days; harvest summer squash at 6–8 inches.',fertilizer:'Balanced fertilizer at planting, low-nitrogen once flowering.',pests:['Squash vine borers','Squash bugs','Cucumber beetles'],tips:['In Texas heat, shade cloth in July–August prevents blossom drop.','Mulch heavily to retain moisture.','Plant a second round in late July for fall harvest.']},
-  'cantaloupe':{sun:'Full sun',water:'1–2 inches/week; reduce as fruit ripens for sweeter flavor.',soil:'Sandy loam, well-draining; pH 6.0–6.8.',spacing:'36 inches apart; allow vines to trail.',harvest:'75–90 days; ripe when stem slips easily.',fertilizer:'High nitrogen early, switch to P/K at flowering.',pests:['Aphids','Cucumber beetles','Powdery mildew'],tips:['Texas summers are ideal — plant after last frost.','Place fruit on a board to keep off hot soil.','Stop watering 1 week before harvest.']},
-  'bell pepper':{sun:'Full sun (6–8 hrs min)',water:'1–2 inches/week; consistent moisture prevents blossom end rot.',soil:'Well-draining, fertile soil; pH 6.0–6.8.',spacing:'18–24 inches apart',harvest:'60–90 days; green at maturity, longer for color.',fertilizer:'Low N at planting, more P/K at first bloom.',pests:['Aphids','Pepper weevils','Spider mites'],tips:['Texas summers above 95°F can cause blossom drop — shade cloth helps.','Mulch 3–4 inches deep.','Stake plants early; loaded branches snap in storms.']},
-  'jalapeño':{sun:'Full sun',water:'1 inch/week; slight drought stress increases heat.',soil:'Well-draining, fertile; pH 6.0–6.8.',spacing:'14–18 inches apart',harvest:'70–85 days; harvest green or red.',fertilizer:'Balanced at transplant; limit N mid-season.',pests:['Aphids','Pepper maggots','Bacterial leaf spot'],tips:['Thrives in Texas heat — one of the best peppers for zone 7b/8a.','Stress slightly before harvest for hotter peppers.','Can overwinter indoors in a pot.']},
-  'serrano':{sun:'Full sun',water:'1 inch/week; tolerates heat well.',soil:'Well-draining, fertile; pH 6.0–6.8.',spacing:'18–24 inches apart',harvest:'75–90 days; harvest green or red.',fertilizer:'Light feeding; avoid over-N.',pests:['Aphids','Spider mites','Flea beetles'],tips:['More heat-tolerant than jalapeño.','Higher capsaicin; harvest smaller for more heat.','Prolific producer — 50+ peppers per plant.']},
-  'thyme':{sun:'Full sun to partial shade',water:'Low water; drought-tolerant once established.',soil:'Well-draining, sandy or loamy; pH 6.0–8.0.',spacing:'12–18 inches apart',harvest:'Harvest sprigs anytime; trim before flowering.',fertilizer:'Light feeder; one balanced dose in spring.',pests:['Aphids (rare)','Spider mites in dry conditions'],tips:['Thrives in Texas heat — very low maintenance.','Trim after flowering to prevent woodiness.','Mulch lightly in winter for occasional hard freezes.']},
-  'marigold':{sun:'Full sun',water:'Moderate; water at base; drought-tolerant once established.',soil:'Average, well-draining; pH 6.0–7.0.',spacing:'8–12 inches apart',harvest:null,fertilizer:'Light feeder; too much fertilizer = more foliage, fewer flowers.',pests:['Spider mites (in heat)','Slugs'],tips:['Repels aphids, nematodes, whiteflies — excellent companion plant.','Deadhead spent blooms for continuous flowering.','Texas heat may cause summer slow-down; rebounds in fall.']},
-  'tomato':{sun:'Full sun',water:'1–2 inches/week, deep watering at base.',soil:'Rich, well-draining, slightly acidic; pH 6.2–6.8.',spacing:'24–36 inches apart',harvest:'60–85 days depending on variety.',fertilizer:'Balanced at planting; switch to lower N at flowering.',pests:['Hornworms','Whiteflies','Blossom end rot (calcium issue)'],tips:['Texas heat can halt fruit set above 95°F — shade cloth helps.','Stake or cage early.','Mulch heavily to maintain even moisture.']},
-  'basil':{sun:'Full sun',water:'Keep soil consistently moist but not soggy.',soil:'Rich, well-draining; pH 6.0–7.0.',spacing:'12–18 inches apart',harvest:'Pinch leaves continuously; cut flowers to extend production.',fertilizer:'Light feeder; balanced fertilizer monthly.',pests:['Aphids','Japanese beetles','Downy mildew'],tips:['Pinch flowers immediately to prolong leaf production.','Loves Texas heat as long as it has water.','Companion plants well with tomatoes.']},
-  'rosemary':{sun:'Full sun',water:'Drought-tolerant; let soil dry between waterings.',soil:'Well-draining, slightly alkaline; pH 6.0–7.5.',spacing:'24–36 inches apart',harvest:'Cut sprigs anytime; never more than 1/3 at once.',fertilizer:'Minimal feeding; light spring fertilizer.',pests:['Spider mites','Powdery mildew'],tips:['Excellent for Texas — very drought-tolerant.','Avoid overwatering; root rot is the biggest risk.','Can grow into a small shrub over years.']},
-  'lavender':{sun:'Full sun',water:'Drought-tolerant; water deeply but infrequently.',soil:'Well-draining, sandy, slightly alkaline; pH 6.7–7.3.',spacing:'18–36 inches apart',harvest:'Harvest flowers when buds open; cut stems long.',fertilizer:'Minimal; lavender prefers lean soil.',pests:['Spittlebugs','Root rot from overwatering'],tips:['Texas summers: French/Spanish lavender handles heat better than English.','Excellent drainage is critical.','Prune after flowering to shape and prevent woodiness.']},
-};
+const API_KEY_STORAGE = 'garden_journal_api_key_v1';
+const PBKDF2_ITERATIONS = 250000;
 
-function getCare(label) {
-  if (!label) return null;
-  const k = label.toLowerCase();
-  if (CARE_DB[k]) return CARE_DB[k];
-  for (const key of Object.keys(CARE_DB)) {
-    if (k.includes(key) || key.includes(k.split(/[\s(]/)[0])) return CARE_DB[key];
-  }
-  return null;
+let cachedPlaintextKey = null;  // session-only; cleared on lock()
+
+function b64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function unb64(s) {
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
 }
 
-  __mods["src/care/careDb.js"].getCare = getCare;
+async function deriveKey(passphrase, salt) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+function readEnvelope() {
+  try {
+    const raw = localStorage.getItem(API_KEY_STORAGE);
+    if (!raw) return null;
+    const env = JSON.parse(raw);
+    if (env.v !== 1) return null;
+    return env;
+  } catch { return null; }
+}
+
+function hasStoredKey() { return readEnvelope() !== null; }
+function getKeyHint()   { return readEnvelope()?.hint || null; }
+function isUnlocked()   { return cachedPlaintextKey !== null; }
+function lock()         { cachedPlaintextKey = null; }
+
+async function setApiKey(plaintextKey, passphrase) {
+  if (!plaintextKey || !passphrase) throw new Error('setApiKey: key and passphrase required.');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(passphrase, salt);
+  const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintextKey));
+  const env = {
+    v: 1,
+    salt: b64(salt),
+    iv:   b64(iv),
+    ct:   b64(ct),
+    hint: plaintextKey.slice(-4),
+  };
+  localStorage.setItem(API_KEY_STORAGE, JSON.stringify(env));
+  cachedPlaintextKey = plaintextKey;
+  return env.hint;
+}
+
+async function unlock(passphrase) {
+  const env = readEnvelope();
+  if (!env) throw new Error('No stored API key.');
+  const key = await deriveKey(passphrase, unb64(env.salt));
+  try {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv) }, key, unb64(env.ct));
+    cachedPlaintextKey = new TextDecoder().decode(pt);
+    return true;
+  } catch {
+    // AES-GCM throws on auth-tag mismatch — i.e. wrong passphrase.
+    throw new Error('Wrong passphrase.');
+  }
+}
+
+function getApiKey() {
+  return cachedPlaintextKey;
+}
+
+function clearApiKey() {
+  localStorage.removeItem(API_KEY_STORAGE);
+  cachedPlaintextKey = null;
+}
+
+  __mods["src/state/apiKey.js"].hasStoredKey = hasStoredKey;
+  __mods["src/state/apiKey.js"].getKeyHint = getKeyHint;
+  __mods["src/state/apiKey.js"].isUnlocked = isUnlocked;
+  __mods["src/state/apiKey.js"].lock = lock;
+  __mods["src/state/apiKey.js"].setApiKey = setApiKey;
+  __mods["src/state/apiKey.js"].unlock = unlock;
+  __mods["src/state/apiKey.js"].getApiKey = getApiKey;
+  __mods["src/state/apiKey.js"].clearApiKey = clearApiKey;
+}
+
+// ── src/vision/client.js ──
+{
+  __mods["src/vision/client.js"] = {};
+  const { VISION_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS } = __mods["src/config.js"];
+  const { getApiKey } = __mods["src/state/apiKey.js"];
+
+
+// Single seam for the Anthropic Messages API. Two operating modes:
+//
+//   1. Inside the Claude.ai artifact preview — the host proxies our request,
+//      so we omit auth headers entirely. This is the current default.
+//   2. Outside the sandbox — the user has unlocked an encrypted API key (see
+//      src/state/apiKey.js, BLUEPRINT.md §6). We attach x-api-key,
+//      anthropic-version, and the direct-browser-access header.
+//
+// A future third mode (Supabase edge-function proxy) replaces VISION_ENDPOINT
+// with /api/vision/* and drops the api-key header entirely.
+
+async function visionRequest(messages) {
+  const headers = { 'Content-Type': 'application/json' };
+  const key = getApiKey();
+  if (key) {
+    headers['x-api-key']         = key;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
+
+  const resp = await fetch(VISION_ENDPOINT, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: VISION_MODEL,
+      max_tokens: VISION_MAX_TOKENS,
+      messages,
+    }),
+  });
+  if (!resp.ok) throw new Error('Vision API ' + resp.status);
+  const data = await resp.json();
+  const text = data.content
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('')
+    .replace(/```json|```/g, '')
+    .trim();
+  return JSON.parse(text);
+}
+
+function imageBlock(dataUrl) {
+  return {
+    type: 'image',
+    source: { type: 'base64', media_type: 'image/jpeg', data: dataUrl.split(',')[1] },
+  };
+}
+
+function textBlock(text) {
+  return { type: 'text', text };
+}
+
+  __mods["src/vision/client.js"].visionRequest = visionRequest;
+  __mods["src/vision/client.js"].imageBlock = imageBlock;
+  __mods["src/vision/client.js"].textBlock = textBlock;
+}
+
+// ── src/vision/regionPrompt.js ──
+{
+  __mods["src/vision/regionPrompt.js"] = {};
+  const { repo } = __mods["src/data/repo.js"];
+
+// Build a region phrase to splice into vision prompts. Reads the current
+// user's region fields and returns either a non-empty fragment or ''. The
+// fragment is meant to follow "a backyard garden" — see analyze.js,
+// reidentify.js, careAdvice.js.
+//
+// Priority: explicit region_label > zip_code > nothing. zip_source isn't
+// used in the prompt itself; it's metadata about where the zip came from.
+
+function regionPhrase() {
+  const u = repo.user.get();
+  if (u?.region_label) return `in ${u.region_label}`;
+  if (u?.zip_code)     return `in zip code ${u.zip_code}`;
+  return '';
+}
+
+  __mods["src/vision/regionPrompt.js"].regionPhrase = regionPhrase;
+}
+
+// ── src/vision/careAdvice.js ──
+{
+  __mods["src/vision/careAdvice.js"] = {};
+  const { visionRequest, imageBlock, textBlock } = __mods["src/vision/client.js"];
+  const { regionPhrase } = __mods["src/vision/regionPrompt.js"];
+  const { repo } = __mods["src/data/repo.js"];
+
+
+
+// On-demand care advice for a single plant. Sends the zone's most recent
+// reference photo (if any) plus a short summary of the plant's journal
+// history so the model can spot problems instead of giving generic tips.
+//
+// Caller is responsible for caching (see src/care/careCache.js) — this
+// function always makes a network call.
+
+const RECENT_JOURNAL_LIMIT = 5;
+
+async function fetchCareAdvice(plantId) {
+  const plant = repo.plants.get(plantId);
+  if (!plant) throw new Error('Plant not found.');
+  const zone = repo.zones.get(plant.zone_id);
+  const journal = repo.journal.listByZone(plant.zone_id) || [];
+
+  const recent = journal
+    .slice()
+    .sort((a, b) => (b.entry_date || 0) - (a.entry_date || 0))
+    .slice(0, RECENT_JOURNAL_LIMIT)
+    .map(j => {
+      const date = j.entry_date ? new Date(j.entry_date).toISOString().slice(0, 10) : 'unknown date';
+      const note = j.overall_health_note ? ` — ${j.overall_health_note}` : '';
+      return `  - ${date}: ${j.plant_count || 0} plants tagged${note}`;
+    })
+    .join('\n');
+
+  const region = regionPhrase();
+  const regionPart = region ? ' ' + region : '';
+
+  const species = plant.species || plant.display_label || 'unknown plant';
+  const cat = plant.category || 'unknown';
+  const notes = (plant.notes || '').trim();
+  const notesLine = notes ? `User notes about this plant: ${notes}` : '';
+  const historyLine = recent
+    ? `Recent journal entries for the zone this plant is in (newest first):\n${recent}`
+    : 'No journal history for this plant yet.';
+
+  const content = [];
+  const refImage = zone?.reference_image_path;
+  if (refImage) content.push(imageBlock(refImage));
+
+  content.push(textBlock(`You are a gardening assistant giving care advice for a specific plant${regionPart}.
+
+Plant species: ${species}
+Category: ${cat}
+${notesLine}
+
+${historyLine}
+
+${refImage ? 'A photo of the zone is attached. Use it to spot visible problems (yellowing, pests, spacing, container condition, etc.) when listing concerns.' : 'No photo of the zone is available.'}
+
+Return ONLY valid JSON, no preamble or markdown, with this shape:
+{
+  "sun": "...",
+  "water": "...",
+  "soil": "...",
+  "spacing": "...",
+  "fertilizer": "...",
+  "harvest": "...",
+  "pests": ["..."],
+  "tips": ["..."],
+  "concerns": ["..."]
+}
+
+- Keep each text field under 200 characters.
+- "tips" are general best practices tailored to the species and region.
+- "concerns" are issues spotted in the photo OR implied by the journal trend; empty array if nothing notable.
+- Omit fields that don't apply (e.g. "harvest" for a non-edible flowering plant).`));
+
+  return visionRequest([{ role: 'user', content }]);
+}
+
+  __mods["src/vision/careAdvice.js"].fetchCareAdvice = fetchCareAdvice;
+}
+
+// ── src/data/toonDecode.js ──
+{
+  __mods["src/data/toonDecode.js"] = {};
+
+// Minimal TOON decoders. Used only by artifact-mode builds; the regular
+// dist bundle uses inline JS literals and never imports this file.
+//
+// TOON (Token-Oriented Object Notation) is a token-efficient JSON
+// alternative. We use the smallest possible subset: comma-separated string
+// lists. Future build optimizations can grow this without touching call sites.
+//
+// Runtime contract: input is plain JS text the bundler embedded, output is
+// the same JS shape the call site used to receive when it was an inline
+// literal.
+
+function decodeStringList(s) {
+  return s.length ? s.split(',') : [];
+}
+
+  __mods["src/data/toonDecode.js"].decodeStringList = decodeStringList;
+}
+
+// ── src/assets/loadingPhrases.js ──
+{
+  __mods["src/assets/loadingPhrases.js"] = {};
+  const { decodeStringList } = __mods["src/data/toonDecode.js"];
+
+const VERBS = decodeStringList("Reticulating,Triangulating,Crossbreeding,Photosynthesizing,Pollinating,Germinating,Chlorophylling,Propagating,Taxonomizing,Transpiring,Rhizomatizing,Mycorrhizing,Stomating,Auxinizing,Sporulating,Phenotyping,Grafting,Composting,Stratifying,Vernalizing");
+const NOUNS = decodeStringList("splines,root networks,leaf matrices,pollen vectors,soil horizons,chloroplasts,seed banks,growth rings,vine lattices,mycelia,stomatal arrays,bract formations,rhizomes,auxin gradients,spore clouds,phenotype data,graft unions,humus layers,germination curves,photoperiods");
+function randomPhrase() {
+  const v = VERBS[Math.floor(Math.random() * VERBS.length)];
+  const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  return `${v} ${n}…`;
+}
+
+  __mods["src/assets/loadingPhrases.js"].randomPhrase = randomPhrase;
 }
 
 // ── src/ui/carePanel.js ──
@@ -1041,8 +1328,13 @@ function getCare(label) {
   __mods["src/ui/carePanel.js"] = {};
   const { $, escapeHtml: esc } = __mods["src/ui/dom.js"];
   const { repo } = __mods["src/data/repo.js"];
-  const { getCare } = __mods["src/care/careDb.js"];
+  const { fetchCareAdvice } = __mods["src/vision/careAdvice.js"];
+  const { randomPhrase } = __mods["src/assets/loadingPhrases.js"];
+  const { events, EV } = __mods["src/state/session.js"];
 
+
+
+import * as careCache from '../care/careCache.js';
 
 
 function initCarePanel() {
@@ -1052,40 +1344,147 @@ function initCarePanel() {
   const body  = $('careBody');
   const close = $('careClose');
 
-  function openById(plantId) {
-    const p = repo.plants.get(plantId);
-    if (!p) return;
-    const label = p.display_label || p.species || 'Plant';
-    title.textContent = label;
-    sub.textContent = p.category || '';
-    const info = getCare(label);
+  let currentPlantId = null;
+  let phraseTimer = null;
+
+  function renderAdvice(info) {
     if (!info) {
-      body.innerHTML = `<div style="color:#e88;font-size:0.65rem;padding:10px 0">No care info available for "${esc(label)}".</div>`;
-    } else {
-      let html = '<div class="care-section"><div class="care-section-title">At a Glance</div>';
+      body.innerHTML = `<div style="color:#bcd;font-size:0.65rem;padding:10px 0">No care info yet.</div>`;
+      return;
+    }
+    let html = '';
+    const hasGlance = info.sun || info.spacing;
+    if (hasGlance) {
+      html += '<div class="care-section"><div class="care-section-title">At a Glance</div>';
       if (info.sun)     html += `<span class="care-tag sun">☀️ ${esc(info.sun)}</span>`;
       if (info.spacing) html += `<span class="care-tag zone">↔ ${esc(info.spacing)}</span>`;
       html += '</div>';
-      if (info.water)      html += `<div class="care-section"><div class="care-section-title">Watering</div><p>${esc(info.water)}</p></div>`;
-      if (info.soil)       html += `<div class="care-section"><div class="care-section-title">Soil</div><p>${esc(info.soil)}</p></div>`;
-      if (info.fertilizer) html += `<div class="care-section"><div class="care-section-title">Fertilizer</div><p>${esc(info.fertilizer)}</p></div>`;
-      if (info.harvest)    html += `<div class="care-section"><div class="care-section-title">Harvest</div><p>${esc(info.harvest)}</p></div>`;
-      if (info.pests?.length) {
-        html += '<div class="care-section"><div class="care-section-title">Watch For</div><ul>';
-        info.pests.forEach(x => html += `<li>${esc(x)}</li>`);
-        html += '</ul></div>';
-      }
-      if (info.tips?.length) {
-        html += '<div class="care-section"><div class="care-section-title">Texas Tips</div><ul>';
-        info.tips.forEach(x => html += `<li>${esc(x)}</li>`);
-        html += '</ul></div>';
-      }
-      body.innerHTML = html;
     }
+    if (info.water)      html += `<div class="care-section"><div class="care-section-title">Watering</div><p>${esc(info.water)}</p></div>`;
+    if (info.soil)       html += `<div class="care-section"><div class="care-section-title">Soil</div><p>${esc(info.soil)}</p></div>`;
+    if (info.fertilizer) html += `<div class="care-section"><div class="care-section-title">Fertilizer</div><p>${esc(info.fertilizer)}</p></div>`;
+    if (info.harvest)    html += `<div class="care-section"><div class="care-section-title">Harvest</div><p>${esc(info.harvest)}</p></div>`;
+    if (info.pests?.length) {
+      html += '<div class="care-section"><div class="care-section-title">Watch For</div><ul>';
+      info.pests.forEach(x => html += `<li>${esc(x)}</li>`);
+      html += '</ul></div>';
+    }
+    if (info.concerns?.length) {
+      html += '<div class="care-section"><div class="care-section-title">Concerns from your photos</div><ul>';
+      info.concerns.forEach(x => html += `<li>${esc(x)}</li>`);
+      html += '</ul></div>';
+    }
+    if (info.tips?.length) {
+      html += '<div class="care-section"><div class="care-section-title">Tips</div><ul>';
+      info.tips.forEach(x => html += `<li>${esc(x)}</li>`);
+      html += '</ul></div>';
+    }
+    body.innerHTML = html;
+  }
+
+  function renderFooter({ hasAdvice }) {
+    const wrap = document.createElement('div');
+    wrap.className = 'care-actions';
+    wrap.style.cssText = 'display:flex;gap:8px;margin-top:14px';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-confirm';
+    btn.textContent = hasAdvice ? 'Refresh advice' : 'Get care advice';
+    btn.addEventListener('click', () => fetchAndRender(true));
+    wrap.appendChild(btn);
+    body.appendChild(wrap);
+  }
+
+  function startPhraseCycle() {
+    stopPhraseCycle();
+    phraseTimer = setInterval(() => {
+      const el = body.querySelector('.care-loading-text');
+      if (el) el.textContent = randomPhrase();
+    }, 1800);
+  }
+  function stopPhraseCycle() {
+    if (phraseTimer) { clearInterval(phraseTimer); phraseTimer = null; }
+  }
+
+  function renderLoading() {
+    body.innerHTML = `
+      <div class="care-loading" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:30px 0;color:#9bb">
+        <div class="review-processing-spinner"></div>
+        <div class="care-loading-text" style="font-size:0.65rem;letter-spacing:0.05em">${esc(randomPhrase())}</div>
+      </div>
+    `;
+    startPhraseCycle();
+  }
+
+  function renderError(msg) {
+    body.innerHTML = `<div style="color:#f88;font-size:0.65rem;padding:10px 0">Care advice failed: ${esc(msg)}</div>`;
+    renderFooter({ hasAdvice: false });
+  }
+
+  async function fetchAndRender(force) {
+    const plantId = currentPlantId;
+    if (!plantId) return;
+    const plant = repo.plants.get(plantId);
+    if (!plant) return;
+
+    const zone = repo.zones.get(plant.zone_id);
+    const refImage = zone?.reference_image_path || null;
+
+    renderLoading();
+    try {
+      const advice = await fetchCareAdvice(plantId);
+      stopPhraseCycle();
+      if (plantId !== currentPlantId) return;  // panel switched out
+      careCache.set(plantId, advice, refImage);
+      renderAdvice(advice);
+      renderFooter({ hasAdvice: true });
+    } catch (err) {
+      stopPhraseCycle();
+      if (plantId !== currentPlantId) return;
+      const msg = err?.message || String(err);
+      console.error('Care advice failed:', err);
+      events.emit(EV.TOAST, { msg: 'Care advice failed: ' + msg.slice(0, 80), kind: 'error' });
+      renderError(msg);
+    }
+    void force;  // signature includes the flag for future "force-refresh" semantics
+  }
+
+  function openById(plantId) {
+    const p = repo.plants.get(plantId);
+    if (!p) return;
+    currentPlantId = plantId;
+    const label = p.display_label || p.species || 'Plant';
+    title.textContent = label;
+    sub.textContent = p.category || '';
+
+    body.innerHTML = '';
+    const notes = (p.notes || '').trim();
+    if (notes) {
+      const np = document.createElement('div');
+      np.className = 'care-section';
+      np.innerHTML = `<div class="care-section-title">Your notes</div><p>${esc(notes)}</p>`;
+      body.appendChild(np);
+    }
+
+    const cached = careCache.get(plantId);
+    if (cached?.advice) {
+      renderAdvice(cached.advice);
+      renderFooter({ hasAdvice: true });
+    } else {
+      const cta = document.createElement('div');
+      cta.style.cssText = 'color:#bcd;font-size:0.65rem;padding:10px 0';
+      cta.textContent = 'No care advice yet. Tap below to ask the assistant.';
+      body.appendChild(cta);
+      renderFooter({ hasAdvice: false });
+    }
+
     panel.classList.add('open');
   }
 
-  function closePanel() { panel.classList.remove('open'); }
+  function closePanel() {
+    panel.classList.remove('open');
+    stopPhraseCycle();
+    currentPlantId = null;
+  }
   close.addEventListener('click', closePanel);
 
   return { openById, close: closePanel };
@@ -1981,185 +2380,12 @@ function cropFromImage(dataUrl, xPct, yPct) {
   __mods["src/image/process.js"].cropFromImage = cropFromImage;
 }
 
-// ── src/state/apiKey.js ──
-{
-  __mods["src/state/apiKey.js"] = {};
-
-// Anthropic API key storage. See BLUEPRINT.md §6 (Storage strategy).
-//
-// Strategy: encrypt at rest with a user-chosen passphrase, decrypt once per
-// session and keep the cleartext in a closure (never on `window`).
-//
-// Layout in localStorage (keyed by API_KEY_STORAGE):
-//   { v: 1, salt: <b64>, iv: <b64>, ct: <b64>, hint: <last4> }
-//
-//   v     — format version, bump on schema change
-//   salt  — 16 random bytes, PBKDF2 input
-//   iv    — 12 random bytes, AES-GCM input
-//   ct    — AES-GCM-encrypted UTF-8 of the API key
-//   hint  — last 4 chars of the plaintext key, for UI ("ends in …xyz")
-//
-// PBKDF2-SHA256, 250k iterations. AES-GCM-256.
-
-const API_KEY_STORAGE = 'garden_journal_api_key_v1';
-const PBKDF2_ITERATIONS = 250000;
-
-let cachedPlaintextKey = null;  // session-only; cleared on lock()
-
-function b64(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-function unb64(s) {
-  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
-}
-
-async function deriveKey(passphrase, salt) {
-  const enc = new TextEncoder();
-  const baseKey = await crypto.subtle.importKey(
-    'raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveKey'],
-  );
-  return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
-    baseKey,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt'],
-  );
-}
-
-function readEnvelope() {
-  try {
-    const raw = localStorage.getItem(API_KEY_STORAGE);
-    if (!raw) return null;
-    const env = JSON.parse(raw);
-    if (env.v !== 1) return null;
-    return env;
-  } catch { return null; }
-}
-
-function hasStoredKey() { return readEnvelope() !== null; }
-function getKeyHint()   { return readEnvelope()?.hint || null; }
-function isUnlocked()   { return cachedPlaintextKey !== null; }
-function lock()         { cachedPlaintextKey = null; }
-
-async function setApiKey(plaintextKey, passphrase) {
-  if (!plaintextKey || !passphrase) throw new Error('setApiKey: key and passphrase required.');
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const key  = await deriveKey(passphrase, salt);
-  const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintextKey));
-  const env = {
-    v: 1,
-    salt: b64(salt),
-    iv:   b64(iv),
-    ct:   b64(ct),
-    hint: plaintextKey.slice(-4),
-  };
-  localStorage.setItem(API_KEY_STORAGE, JSON.stringify(env));
-  cachedPlaintextKey = plaintextKey;
-  return env.hint;
-}
-
-async function unlock(passphrase) {
-  const env = readEnvelope();
-  if (!env) throw new Error('No stored API key.');
-  const key = await deriveKey(passphrase, unb64(env.salt));
-  try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv) }, key, unb64(env.ct));
-    cachedPlaintextKey = new TextDecoder().decode(pt);
-    return true;
-  } catch {
-    // AES-GCM throws on auth-tag mismatch — i.e. wrong passphrase.
-    throw new Error('Wrong passphrase.');
-  }
-}
-
-function getApiKey() {
-  return cachedPlaintextKey;
-}
-
-function clearApiKey() {
-  localStorage.removeItem(API_KEY_STORAGE);
-  cachedPlaintextKey = null;
-}
-
-  __mods["src/state/apiKey.js"].hasStoredKey = hasStoredKey;
-  __mods["src/state/apiKey.js"].getKeyHint = getKeyHint;
-  __mods["src/state/apiKey.js"].isUnlocked = isUnlocked;
-  __mods["src/state/apiKey.js"].lock = lock;
-  __mods["src/state/apiKey.js"].setApiKey = setApiKey;
-  __mods["src/state/apiKey.js"].unlock = unlock;
-  __mods["src/state/apiKey.js"].getApiKey = getApiKey;
-  __mods["src/state/apiKey.js"].clearApiKey = clearApiKey;
-}
-
-// ── src/vision/client.js ──
-{
-  __mods["src/vision/client.js"] = {};
-  const { VISION_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS } = __mods["src/config.js"];
-  const { getApiKey } = __mods["src/state/apiKey.js"];
-
-
-// Single seam for the Anthropic Messages API. Two operating modes:
-//
-//   1. Inside the Claude.ai artifact preview — the host proxies our request,
-//      so we omit auth headers entirely. This is the current default.
-//   2. Outside the sandbox — the user has unlocked an encrypted API key (see
-//      src/state/apiKey.js, BLUEPRINT.md §6). We attach x-api-key,
-//      anthropic-version, and the direct-browser-access header.
-//
-// A future third mode (Supabase edge-function proxy) replaces VISION_ENDPOINT
-// with /api/vision/* and drops the api-key header entirely.
-
-async function visionRequest(messages) {
-  const headers = { 'Content-Type': 'application/json' };
-  const key = getApiKey();
-  if (key) {
-    headers['x-api-key']         = key;
-    headers['anthropic-version'] = '2023-06-01';
-    headers['anthropic-dangerous-direct-browser-access'] = 'true';
-  }
-
-  const resp = await fetch(VISION_ENDPOINT, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: VISION_MODEL,
-      max_tokens: VISION_MAX_TOKENS,
-      messages,
-    }),
-  });
-  if (!resp.ok) throw new Error('Vision API ' + resp.status);
-  const data = await resp.json();
-  const text = data.content
-    .filter(b => b.type === 'text')
-    .map(b => b.text)
-    .join('')
-    .replace(/```json|```/g, '')
-    .trim();
-  return JSON.parse(text);
-}
-
-function imageBlock(dataUrl) {
-  return {
-    type: 'image',
-    source: { type: 'base64', media_type: 'image/jpeg', data: dataUrl.split(',')[1] },
-  };
-}
-
-function textBlock(text) {
-  return { type: 'text', text };
-}
-
-  __mods["src/vision/client.js"].visionRequest = visionRequest;
-  __mods["src/vision/client.js"].imageBlock = imageBlock;
-  __mods["src/vision/client.js"].textBlock = textBlock;
-}
-
 // ── src/vision/analyze.js ──
 {
   __mods["src/vision/analyze.js"] = {};
   const { visionRequest, imageBlock, textBlock } = __mods["src/vision/client.js"];
+  const { regionPhrase } = __mods["src/vision/regionPrompt.js"];
+
 
 // Full-photo analysis. Returns:
 //   { plants: [{ name, category, confidence, x, y, notes }], overall_confidence }
@@ -2167,8 +2393,10 @@ async function analyzeFullPhoto(dataUrl, zoneType, existingPlants = []) {
   const existingNote = existingPlants.length
     ? `Previously confirmed plants in this zone: ${existingPlants.map(p => p.species || p.display_label || p.name).join(', ')}.`
     : '';
+  const region = regionPhrase();
+  const regionPart = region ? ' ' + region : '';
 
-  const prompt = `You are a plant identification assistant analyzing a top-down photo of a ${zoneType.replace('_',' ')} in a backyard garden in Texas (zone 7b/8a). ${existingNote}
+  const prompt = `You are a plant identification assistant analyzing a top-down photo of a ${zoneType.replace('_',' ')} in a backyard garden${regionPart}. ${existingNote}
 
 Identify each plant visible in the image. For each plant, provide:
 - name (common species name)
@@ -2195,6 +2423,8 @@ The "overall_confidence" represents how confident you are in the identification 
 {
   __mods["src/vision/reidentify.js"] = {};
   const { visionRequest, imageBlock, textBlock } = __mods["src/vision/client.js"];
+  const { regionPhrase } = __mods["src/vision/regionPrompt.js"];
+
 
 // Batched re-ID for rejected plants. One API call, multiple cropped close-ups.
 // Returns: { crops: [{ index, candidates: [{ name, category, confidence }] }] }
@@ -2210,8 +2440,10 @@ async function reIdentifyBatch(crops, rejectedItems, zoneType, confirmedPlants) 
     : '';
   const rejectedNames = [...new Set(rejectedItems.map(r => r.name))];
   const rejNote = `The user rejected these previous labels: ${rejectedNames.join(', ')}. For each crop, your new candidates MUST exclude the corresponding rejected label, and avoid all the user's rejected labels overall unless visually unmistakable.`;
+  const region = regionPhrase();
+  const regionPart = region ? ' ' + region : '';
 
-  userContent.push(textBlock(`These are ${crops.length} cropped close-ups from a top-down photo of a ${zoneType.replace('_',' ')} in a Texas (zone 7b/8a) backyard garden. The user rejected the previous identifications. Re-identify the plant in the center of each crop.
+  userContent.push(textBlock(`These are ${crops.length} cropped close-ups from a top-down photo of a ${zoneType.replace('_',' ')} backyard garden${regionPart}. The user rejected the previous identifications. Re-identify the plant in the center of each crop.
 
 ${confirmedNote}
 ${rejNote}
@@ -2223,33 +2455,6 @@ For each crop, return up to 3 alternative candidate names ranked by confidence. 
 }
 
   __mods["src/vision/reidentify.js"].reIdentifyBatch = reIdentifyBatch;
-}
-
-// ── src/assets/loadingPhrases.js ──
-{
-  __mods["src/assets/loadingPhrases.js"] = {};
-
-const VERBS = [
-  'Reticulating','Triangulating','Crossbreeding','Photosynthesizing','Pollinating',
-  'Germinating','Chlorophylling','Propagating','Taxonomizing','Transpiring',
-  'Rhizomatizing','Mycorrhizing','Stomating','Auxinizing','Sporulating',
-  'Phenotyping','Grafting','Composting','Stratifying','Vernalizing',
-];
-
-const NOUNS = [
-  'splines','root networks','leaf matrices','pollen vectors','soil horizons',
-  'chloroplasts','seed banks','growth rings','vine lattices','mycelia',
-  'stomatal arrays','bract formations','rhizomes','auxin gradients','spore clouds',
-  'phenotype data','graft unions','humus layers','germination curves','photoperiods',
-];
-
-function randomPhrase() {
-  const v = VERBS[Math.floor(Math.random() * VERBS.length)];
-  const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  return `${v} ${n}…`;
-}
-
-  __mods["src/assets/loadingPhrases.js"].randomPhrase = randomPhrase;
 }
 
 // ── src/assets/devTestImage.js ──
