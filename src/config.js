@@ -24,3 +24,7 @@ export const REID_CROP_PCT = 25;
 export const VISION_MODEL    = 'claude-sonnet-4-20250514';
 export const VISION_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 export const VISION_MAX_TOKENS = 2000;
+
+// Supabase project credentials (anon/public key — safe to ship in client code).
+export const SUPABASE_URL      = 'https://czoaeombqqhgyqbsetlj.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_LDKc3zPhBInG-DpInW0gLw_3GNt7MMP';

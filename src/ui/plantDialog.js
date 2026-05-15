@@ -2,6 +2,7 @@ import { $ } from './dom.js';
 import { repo } from '../data/repo.js';
 import { session, events, EV } from '../state/session.js';
 import { awardXP } from '../state/xp.js';
+import { logAction } from '../data/actionsLog.js';
 
 export function initPlantDialog() {
   const dlg     = $('plantDialog');
@@ -52,12 +53,14 @@ export function initPlantDialog() {
     const notesVal = notes.value.trim();
 
     if (session.editingPlantId) {
+      const old = repo.plants.get(session.editingPlantId);
       repo.plants.update(session.editingPlantId, {
         display_label: nameVal,
         species: nameVal,
         category: catVal,
         notes: notesVal,
       });
+      logAction('plant_edited', { species_canonical: nameVal.toLowerCase(), old_species: old ? (old.species || '').toLowerCase() : null, category: catVal });
     } else if (session.pendingPos && session.currentZoneId) {
       repo.plants.create({
         zone_id: session.currentZoneId,
@@ -69,6 +72,7 @@ export function initPlantDialog() {
         y: session.pendingPos.y,
         custom: true,
       });
+      logAction('plant_added_custom', { species_canonical: nameVal.toLowerCase(), category: catVal });
       awardXP(2, 'Manual tag added');
     }
 

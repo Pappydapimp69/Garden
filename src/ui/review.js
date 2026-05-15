@@ -9,6 +9,7 @@ import { reIdentifyBatch } from '../vision/reidentify.js';
 import { randomPhrase } from '../assets/loadingPhrases.js';
 import { DEV_TEST_IMAGE } from '../assets/devTestImage.js';
 import { extractCaptureDate } from '../image/exif.js';
+import { logAction } from '../data/actionsLog.js';
 
 export function initReview() {
   const screen     = $('reviewScreen');
@@ -182,6 +183,9 @@ export function initReview() {
     renderMarkers();
     renderList();
     updateAcceptLabel();
+
+    const z = repo.zones.get(session.currentZoneId);
+    logAction('photo_analyzed', { plant_count: pendingTags.length, zone_type: z ? z.type : null });
   }
 
   function renderMarkers() {
@@ -333,6 +337,12 @@ export function initReview() {
         pending: !!t.pending,
         custom: !!t.custom,
       });
+      logAction('plant_confirmed', {
+        species_canonical: (t.name || '').toLowerCase() || null,
+        confidence: t.confidence ?? null,
+        category: t.category || 'unknown',
+        zone_type: z.type,
+      });
     });
     const dateInput = document.getElementById('reviewDateInput');
     const entryDate = parseDatetimeLocal(dateInput.value) ?? Date.now();
@@ -344,6 +354,7 @@ export function initReview() {
       plant_count: accepted.length,
       overall_health_note: `${accepted.length} plants tagged from photo`,
     });
+    logAction('journal_entry_saved', { zone_id: z.id, plant_count: accepted.length });
 
     awardXP(10 + accepted.length * 2, `Photo analyzed (${accepted.length} plants)`);
     events.emit(EV.PLANTS_CHANGED,  { zoneId: z.id });
@@ -584,6 +595,8 @@ export function initReview() {
 
     const accepted = pendingTags.filter(t => t.accepted);
     const rejected = pendingTags.filter(t => !t.accepted);
+
+    rejected.forEach(() => logAction('plant_rejected', { zone_id: session.currentZoneId }));
 
     if (rejected.length > 0) {
       await startReIDFlow(session.currentZoneId, accepted, rejected);

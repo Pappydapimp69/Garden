@@ -2,6 +2,7 @@
 // re-render in response, instead of calling each other directly.
 
 export const session = {
+  currentUser: null,   // { user_id, email } — populated after auth
   currentZoneId: null,
   currentTab: 'map',
 
