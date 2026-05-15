@@ -647,8 +647,14 @@ function migrateFromV1(v1raw) {
   const { emptyDB, migrateFromV1, newId } = __mods["src/data/schema.js"];
 
 
+// Async-write / sync-read repo. Reads serve from an in-memory cache that's
+// hydrated by init(); writes mutate the cache and persist to localStorage.
+// supabaseRepo follows the same shape, so UI code is portable between them
+// — see BLUEPRINT.md §5 step 1.
+
 function createLocalRepo() {
-  let db = load();
+  let db = emptyDB();
+  let initialized = false;
 
   function load() {
     // Prefer v2 if it exists; otherwise migrate from v1; otherwise start fresh.
@@ -688,7 +694,7 @@ function createLocalRepo() {
     catch (e) { console.warn('Could not save DB', e); throw e; }
   }
 
-  function ensureDefaultGarden() {
+  function ensureDefaultGardenSync() {
     if (db.gardens.length > 0) return db.gardens[0];
     const g = { id: newId('g'), user_id: null, name: 'My Garden', created_at: Date.now() };
     db.gardens.push(g);
@@ -697,27 +703,33 @@ function createLocalRepo() {
   }
 
   return {
+    async init() {
+      if (initialized) return;
+      db = load();
+      initialized = true;
+    },
+
     raw: () => db,
     save,
     newId,
 
     user: {
       get: () => db.user,
-      update: (patch) => { db.user = { ...db.user, ...patch }; save(); return db.user; },
+      update: async (patch) => { db.user = { ...db.user, ...patch }; save(); return db.user; },
     },
 
     gardens: {
       list:    () => db.gardens.slice(),
       get:     (id) => db.gardens.find(g => g.id === id),
-      ensureDefault: ensureDefaultGarden,
+      ensureDefault: async () => ensureDefaultGardenSync(),
     },
 
     zones: {
       list: () => db.zones.slice(),
       listByGarden: (gardenId) => db.zones.filter(z => z.garden_id === gardenId),
       get: (id) => db.zones.find(z => z.id === id),
-      create: ({ name, type, reference_image_path = null }) => {
-        const garden = ensureDefaultGarden();
+      create: async ({ name, type, reference_image_path = null }) => {
+        const garden = ensureDefaultGardenSync();
         const z = {
           id: newId('z'),
           garden_id: garden.id,
@@ -730,14 +742,14 @@ function createLocalRepo() {
         save();
         return z;
       },
-      update: (id, patch) => {
+      update: async (id, patch) => {
         const z = db.zones.find(zz => zz.id === id);
         if (!z) return null;
         Object.assign(z, patch);
         save();
         return z;
       },
-      delete: (id) => {
+      delete: async (id) => {
         db.zones = db.zones.filter(z => z.id !== id);
         db.plants = db.plants.filter(p => p.zone_id !== id);
         db.journal_entries = db.journal_entries.filter(j => j.zone_id !== id);
@@ -751,7 +763,7 @@ function createLocalRepo() {
         return includeDeleted ? ps : ps.filter(p => !p.deleted);
       },
       get: (id) => db.plants.find(p => p.id === id),
-      create: (plant) => {
+      create: async (plant) => {
         const p = {
           id: plant.id || newId('p'),
           zone_id: plant.zone_id,
@@ -775,7 +787,7 @@ function createLocalRepo() {
         save();
         return p;
       },
-      update: (id, patch) => {
+      update: async (id, patch) => {
         const p = db.plants.find(pp => pp.id === id);
         if (!p) return null;
         Object.assign(p, patch);
@@ -783,7 +795,7 @@ function createLocalRepo() {
         save();
         return p;
       },
-      softDelete: (id) => {
+      softDelete: async (id) => {
         const p = db.plants.find(pp => pp.id === id);
         if (p) { p.deleted = true; save(); }
       },
@@ -791,7 +803,7 @@ function createLocalRepo() {
 
     journal: {
       listByZone: (zoneId) => db.journal_entries.filter(j => j.zone_id === zoneId),
-      append: (entry) => {
+      append: async (entry) => {
         const j = {
           id: entry.id || newId('j'),
           zone_id: entry.zone_id,
@@ -812,7 +824,7 @@ function createLocalRepo() {
 
     progress: {
       get: () => ({ xp: db.xp, level: db.level }),
-      set: ({ xp, level }) => { db.xp = xp; db.level = level; save(); },
+      set: async ({ xp, level }) => { db.xp = xp; db.level = level; save(); },
     },
   };
 }
@@ -865,6 +877,7 @@ const session = {
   singleTapTimer: null,
   pressStart: null,
   pressTagId: null,
+  dragPos: null,                     // latest pct during tag-drag; persisted once on drop
   panStart: null,
   activePointers: new Map(),
   pinchStart: null,
@@ -913,7 +926,7 @@ function xpForLevel(level) {
   return Math.round(50 * Math.pow(level, 1.4));
 }
 
-function awardXP(amount, reason) {
+async function awardXP(amount, reason) {
   let { xp, level } = repo.progress.get();
   xp += amount;
   let leveled = false;
@@ -922,7 +935,7 @@ function awardXP(amount, reason) {
     level++;
     leveled = true;
   }
-  repo.progress.set({ xp, level });
+  await repo.progress.set({ xp, level });
   events.emit(EV.PROGRESS_CHANGED, { xp, level, leveled, amount, reason });
   if (leveled) {
     events.emit(EV.TOAST, { msg: `Level up! Vision is now Lv ${level}`, kind: 'xp' });
@@ -1135,20 +1148,20 @@ function initPlantDialog() {
   cancel.addEventListener('click', close);
   dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
-  confirm.addEventListener('click', () => {
+  confirm.addEventListener('click', async () => {
     const nameVal = name.value.trim() || 'Unknown Plant';
     const catVal  = cat.value;
     const notesVal = notes.value.trim();
 
     if (session.editingPlantId) {
-      repo.plants.update(session.editingPlantId, {
+      await repo.plants.update(session.editingPlantId, {
         display_label: nameVal,
         species: nameVal,
         category: catVal,
         notes: notesVal,
       });
     } else if (session.pendingPos && session.currentZoneId) {
-      repo.plants.create({
+      await repo.plants.create({
         zone_id: session.currentZoneId,
         display_label: nameVal,
         species: nameVal,
@@ -1158,16 +1171,16 @@ function initPlantDialog() {
         y: session.pendingPos.y,
         custom: true,
       });
-      awardXP(2, 'Manual tag added');
+      await awardXP(2, 'Manual tag added');
     }
 
     close();
     events.emit(EV.PLANTS_CHANGED, { zoneId: session.currentZoneId });
   });
 
-  del.addEventListener('click', () => {
+  del.addEventListener('click', async () => {
     if (!session.editingPlantId) return;
-    repo.plants.softDelete(session.editingPlantId);
+    await repo.plants.softDelete(session.editingPlantId);
     close();
     events.emit(EV.PLANTS_CHANGED, { zoneId: session.currentZoneId });
   });
@@ -1234,24 +1247,24 @@ function initZoneDialog({ onAfterDelete }) {
   cancel.addEventListener('click', close);
   dlg.addEventListener('click', e => { if (e.target === dlg) close(); });
 
-  confirm.addEventListener('click', () => {
+  confirm.addEventListener('click', async () => {
     const name = nameInp.value.trim();
     if (!name) { events.emit(EV.TOAST, { msg: 'Please enter a name' }); return; }
     if (session.pendingZoneId) {
-      repo.zones.update(session.pendingZoneId, { name, type: typeInp.value });
+      await repo.zones.update(session.pendingZoneId, { name, type: typeInp.value });
     } else {
-      repo.zones.create({ name, type: typeInp.value });
-      awardXP(5, 'New zone created');
+      await repo.zones.create({ name, type: typeInp.value });
+      await awardXP(5, 'New zone created');
     }
     events.emit(EV.ZONES_CHANGED);
     close();
   });
 
-  del.addEventListener('click', () => {
+  del.addEventListener('click', async () => {
     if (!session.pendingZoneId) return;
     if (del.dataset.confirming === '1') {
       const id = session.pendingZoneId;
-      repo.zones.delete(id);
+      await repo.zones.delete(id);
       delete del.dataset.confirming;
       del.textContent = 'Delete';
       close();
@@ -1576,7 +1589,7 @@ function initZone({ onPlantTap, onPlantDoubleTap, onPlantLongPressDone, onAddPla
     }
     if (session.mode === 'tag-drag') {
       const pct = clientToImagePct(e.clientX, e.clientY);
-      repo.plants.update(session.pressTagId, { x: pct.x, y: pct.y });
+      session.dragPos = pct;
       const el = document.querySelector(`.marker[data-id="${session.pressTagId}"]`);
       if (el) { el.style.left = pct.x + '%'; el.style.top = pct.y + '%'; }
       return;
@@ -1623,7 +1636,6 @@ function initZone({ onPlantTap, onPlantDoubleTap, onPlantLongPressDone, onAddPla
     }
     if (session.mode === 'tag-drag') {
       finishTagDrag();
-      // repo.plants.update already saved on each move; nothing else to persist here.
       return;
     }
     if (session.mode === 'tag-press') {
@@ -1740,13 +1752,22 @@ function initZone({ onPlantTap, onPlantDoubleTap, onPlantLongPressDone, onAddPla
   }
 
   function finishTagDrag() {
-    if (session.pressTagId !== null) {
-      const el = document.querySelector(`.marker[data-id="${session.pressTagId}"]`);
+    const draggedId = session.pressTagId;
+    const finalPos = session.dragPos;
+    if (draggedId !== null) {
+      const el = document.querySelector(`.marker[data-id="${draggedId}"]`);
       if (el) el.classList.remove('dragging');
     }
     session.mode = 'idle';
     session.pressTagId = null;
     session.pressStart = null;
+    session.dragPos = null;
+    // Persist the final position once. Fire-and-forget — DOM already reflects it
+    // and the next render reads from the in-memory cache anyway.
+    if (draggedId !== null && finalPos) {
+      repo.plants.update(draggedId, { x: finalPos.x, y: finalPos.y })
+        .catch(err => console.error('Drag persist failed', err));
+    }
   }
 
   function cancelAllTimers() {
@@ -1960,27 +1981,144 @@ function cropFromImage(dataUrl, xPct, yPct) {
   __mods["src/image/process.js"].cropFromImage = cropFromImage;
 }
 
+// ── src/state/apiKey.js ──
+{
+  __mods["src/state/apiKey.js"] = {};
+
+// Anthropic API key storage. See BLUEPRINT.md §6 (Storage strategy).
+//
+// Strategy: encrypt at rest with a user-chosen passphrase, decrypt once per
+// session and keep the cleartext in a closure (never on `window`).
+//
+// Layout in localStorage (keyed by API_KEY_STORAGE):
+//   { v: 1, salt: <b64>, iv: <b64>, ct: <b64>, hint: <last4> }
+//
+//   v     — format version, bump on schema change
+//   salt  — 16 random bytes, PBKDF2 input
+//   iv    — 12 random bytes, AES-GCM input
+//   ct    — AES-GCM-encrypted UTF-8 of the API key
+//   hint  — last 4 chars of the plaintext key, for UI ("ends in …xyz")
+//
+// PBKDF2-SHA256, 250k iterations. AES-GCM-256.
+
+const API_KEY_STORAGE = 'garden_journal_api_key_v1';
+const PBKDF2_ITERATIONS = 250000;
+
+let cachedPlaintextKey = null;  // session-only; cleared on lock()
+
+function b64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function unb64(s) {
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+async function deriveKey(passphrase, salt) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw', enc.encode(passphrase), { name: 'PBKDF2' }, false, ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+function readEnvelope() {
+  try {
+    const raw = localStorage.getItem(API_KEY_STORAGE);
+    if (!raw) return null;
+    const env = JSON.parse(raw);
+    if (env.v !== 1) return null;
+    return env;
+  } catch { return null; }
+}
+
+function hasStoredKey() { return readEnvelope() !== null; }
+function getKeyHint()   { return readEnvelope()?.hint || null; }
+function isUnlocked()   { return cachedPlaintextKey !== null; }
+function lock()         { cachedPlaintextKey = null; }
+
+async function setApiKey(plaintextKey, passphrase) {
+  if (!plaintextKey || !passphrase) throw new Error('setApiKey: key and passphrase required.');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(passphrase, salt);
+  const ct   = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintextKey));
+  const env = {
+    v: 1,
+    salt: b64(salt),
+    iv:   b64(iv),
+    ct:   b64(ct),
+    hint: plaintextKey.slice(-4),
+  };
+  localStorage.setItem(API_KEY_STORAGE, JSON.stringify(env));
+  cachedPlaintextKey = plaintextKey;
+  return env.hint;
+}
+
+async function unlock(passphrase) {
+  const env = readEnvelope();
+  if (!env) throw new Error('No stored API key.');
+  const key = await deriveKey(passphrase, unb64(env.salt));
+  try {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(env.iv) }, key, unb64(env.ct));
+    cachedPlaintextKey = new TextDecoder().decode(pt);
+    return true;
+  } catch {
+    // AES-GCM throws on auth-tag mismatch — i.e. wrong passphrase.
+    throw new Error('Wrong passphrase.');
+  }
+}
+
+function getApiKey() {
+  return cachedPlaintextKey;
+}
+
+function clearApiKey() {
+  localStorage.removeItem(API_KEY_STORAGE);
+  cachedPlaintextKey = null;
+}
+
+  __mods["src/state/apiKey.js"].hasStoredKey = hasStoredKey;
+  __mods["src/state/apiKey.js"].getKeyHint = getKeyHint;
+  __mods["src/state/apiKey.js"].isUnlocked = isUnlocked;
+  __mods["src/state/apiKey.js"].lock = lock;
+  __mods["src/state/apiKey.js"].setApiKey = setApiKey;
+  __mods["src/state/apiKey.js"].unlock = unlock;
+  __mods["src/state/apiKey.js"].getApiKey = getApiKey;
+  __mods["src/state/apiKey.js"].clearApiKey = clearApiKey;
+}
+
 // ── src/vision/client.js ──
 {
   __mods["src/vision/client.js"] = {};
   const { VISION_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS } = __mods["src/config.js"];
+  const { getApiKey } = __mods["src/state/apiKey.js"];
 
-// Single seam for the Anthropic Messages API. Today the call goes direct from
-// the browser with no auth header — that only works inside the Claude.ai
-// artifact preview, which proxies the request. When wiring in real auth:
+
+// Single seam for the Anthropic Messages API. Two operating modes:
 //
-//   1. Add a `getApiKey()` strategy (encrypted in localStorage, decrypted with
-//      a session password — see BLUEPRINT.md "Storage Strategy").
-//   2. Inject the headers below.
-//   3. Optionally proxy through a Supabase edge function so the key never
-//      leaves the device unencrypted.
+//   1. Inside the Claude.ai artifact preview — the host proxies our request,
+//      so we omit auth headers entirely. This is the current default.
+//   2. Outside the sandbox — the user has unlocked an encrypted API key (see
+//      src/state/apiKey.js, BLUEPRINT.md §6). We attach x-api-key,
+//      anthropic-version, and the direct-browser-access header.
+//
+// A future third mode (Supabase edge-function proxy) replaces VISION_ENDPOINT
+// with /api/vision/* and drops the api-key header entirely.
 
 async function visionRequest(messages) {
   const headers = { 'Content-Type': 'application/json' };
-  // TODO: add auth when leaving the Claude.ai sandbox.
-  // headers['x-api-key']         = await getApiKey();
-  // headers['anthropic-version'] = '2023-06-01';
-  // headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  const key = getApiKey();
+  if (key) {
+    headers['x-api-key']         = key;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+  }
 
   const resp = await fetch(VISION_ENDPOINT, {
     method: 'POST',
@@ -2637,14 +2775,14 @@ function initReview() {
   }
 
   // ── Commit accepted tags as plants + journal entry ───────────────
-  function commitTagsToZone(zoneId, accepted) {
+  async function commitTagsToZone(zoneId, accepted) {
     const z = repo.zones.get(zoneId);
     if (!z) return;
     if (!z.reference_image_path) {
-      repo.zones.update(z.id, { reference_image_path: pendingDataUrl });
+      await repo.zones.update(z.id, { reference_image_path: pendingDataUrl });
     }
-    accepted.forEach(t => {
-      repo.plants.create({
+    for (const t of accepted) {
+      await repo.plants.create({
         id: t.id,
         zone_id: z.id,
         display_label: t.name || 'Unknown',
@@ -2656,10 +2794,10 @@ function initReview() {
         pending: !!t.pending,
         custom: !!t.custom,
       });
-    });
+    }
     const dateInput = document.getElementById('reviewDateInput');
     const entryDate = parseDatetimeLocal(dateInput.value) ?? Date.now();
-    repo.journal.append({
+    await repo.journal.append({
       zone_id: z.id,
       entry_date: entryDate,
       photo_path: null,            // intentionally not persisting photo on backend (cost)
@@ -2668,7 +2806,7 @@ function initReview() {
       overall_health_note: `${accepted.length} plants tagged from photo`,
     });
 
-    awardXP(10 + accepted.length * 2, `Photo analyzed (${accepted.length} plants)`);
+    await awardXP(10 + accepted.length * 2, `Photo analyzed (${accepted.length} plants)`);
     events.emit(EV.PLANTS_CHANGED,  { zoneId: z.id });
     events.emit(EV.JOURNAL_CHANGED, { zoneId: z.id });
     events.emit(EV.ZONES_CHANGED);  // thumb may have changed
@@ -2834,7 +2972,7 @@ function initReview() {
     });
 
     updateReIDFinishLabel();
-    acceptBtn.onclick = () => {
+    acceptBtn.onclick = async () => {
       const finalAccepted = [...reidContext.accepted];
       reidContext.rejected.forEach(r => {
         if (!r.choice || r.choice === 'skip') return;
@@ -2857,7 +2995,7 @@ function initReview() {
           pending: false,
         });
       });
-      commitTagsToZone(reidContext.zoneId, finalAccepted);
+      await commitTagsToZone(reidContext.zoneId, finalAccepted);
       acceptBtn.onclick = null;
       acceptBtn.textContent = 'Accept';
     };
@@ -2911,7 +3049,7 @@ function initReview() {
     if (rejected.length > 0) {
       await startReIDFlow(session.currentZoneId, accepted, rejected);
     } else {
-      commitTagsToZone(session.currentZoneId, accepted);
+      await commitTagsToZone(session.currentZoneId, accepted);
     }
   });
 
@@ -2953,6 +3091,11 @@ function initReview() {
 
 
 
+
+// Boot in an async IIFE so we can await repo.init() before any UI renders.
+// (Bundler doesn't support top-level await.)
+(async () => {
+await repo.init();
 
 initToast();
 
@@ -2997,11 +3140,11 @@ photoInputNewZone.addEventListener('change', async (e) => {
     if (!file) return;
     events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
 
-    const z = repo.zones.create({
+    const z = await repo.zones.create({
       name: `Zone ${repo.zones.list().length + 1}`,
       type: 'bed',
     });
-    awardXP(5, 'New zone created');
+    await awardXP(5, 'New zone created');
     events.emit(EV.ZONES_CHANGED);
     zoneScreen.show(z.id);
     await review.handlePhoto(file);
@@ -3015,11 +3158,11 @@ const overview = initOverview({
   onZoneOpen: (zoneId) => zoneScreen.show(zoneId),
   onUploadForNewZone: () => { /* label opens picker natively — nothing to do here */ },
   onDevCreateZone: async () => {
-    const z = repo.zones.create({
+    const z = await repo.zones.create({
       name: `Zone ${repo.zones.list().length + 1}`,
       type: 'patio',
     });
-    awardXP(5, 'New zone created (dev test)');
+    await awardXP(5, 'New zone created (dev test)');
     events.emit(EV.ZONES_CHANGED);
     zoneScreen.show(z.id);
     await review.handleDevPhoto();
@@ -3076,6 +3219,12 @@ events.on('care:close', () => carePanel.close());
 // Initial render.
 overview.renderZoneList();
 overview.renderLevel();
+
+})().catch(err => {
+  console.error('Boot failed:', err);
+  const toast = document.getElementById('toast');
+  if (toast) { toast.textContent = 'Boot failed: ' + (err?.message || err); toast.className = 'toast show error'; }
+});
 
 
 }
