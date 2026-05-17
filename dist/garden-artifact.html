@@ -293,9 +293,41 @@ input, select, textarea { font-family:inherit; }
 .review-marker.pending .dot { background:#5a7a8a !important; border:2px dashed rgba(120,200,232,0.8); }
 .ri-num.pending { background:#5a7a8a; border:1px dashed rgba(120,200,232,0.6); }
 
+/* ── Auth overlay ─────────────────────────────────────────────────── */
+.auth-overlay { position:fixed; inset:0; z-index:9999; background:rgba(6,12,6,0.97); display:none; align-items:center; justify-content:center; }
+.auth-overlay.active { display:flex; }
+.auth-card { width:min(340px, 90vw); background:rgba(8,18,8,0.95); border:1px solid rgba(58,106,42,0.5); border-radius:14px; padding:36px 28px 28px; display:flex; flex-direction:column; gap:14px; }
+.auth-logo { font-size:2.2rem; text-align:center; }
+.auth-title { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.35rem; text-align:center; line-height:1.2; }
+.auth-sub { font-size:0.6rem; color:#5a7a4a; text-align:center; letter-spacing:0.12em; text-transform:uppercase; }
+.auth-error { font-size:0.62rem; color:#e87a7a; background:rgba(232,122,122,0.1); border:1px solid rgba(232,122,122,0.3); border-radius:6px; padding:8px 10px; line-height:1.5; }
+.auth-card input { background:rgba(0,0,0,0.4); border:1px solid rgba(58,106,42,0.4); border-radius:7px; color:#d4e8c2; padding:11px 12px; font-size:0.72rem; outline:none; transition:border-color 0.15s; }
+.auth-card input:focus { border-color:rgba(168,216,120,0.6); }
+.auth-card input::placeholder { color:#3a5a2a; }
+.auth-submit { width:100%; padding:12px; font-size:0.72rem; letter-spacing:0.08em; margin-top:4px; }
+.auth-toggle { background:none; border:none; color:#5a7a4a; font-size:0.6rem; text-align:center; cursor:pointer; padding:4px; letter-spacing:0.05em; transition:color 0.15s; }
+.auth-toggle:hover { color:#a8d878; }
+
+.account-btn { background:rgba(168,216,120,0.1); border:1px solid rgba(168,216,120,0.2); border-radius:6px; width:32px; height:32px; font-size:0.85rem; color:#7a9a6a; cursor:pointer; transition:background 0.15s,color 0.15s; flex-shrink:0; }
+.account-btn:hover { background:rgba(168,216,120,0.2); color:#a8d878; }
+
 </style>
 </head>
 <body>
+
+<!-- ─── Auth Overlay ────────────────────────────────────────────────── -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div class="auth-logo">🌱</div>
+    <h2 class="auth-title">Garden Journal</h2>
+    <p class="auth-sub" id="authSub">Sign in to your garden</p>
+    <div class="auth-error" id="authError" style="display:none"></div>
+    <input type="email"    id="authEmail"    placeholder="Email" autocomplete="email">
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+    <button class="btn btn-confirm auth-submit" id="authSubmit">Sign In</button>
+    <button class="auth-toggle" id="authToggle">No account? Sign up</button>
+  </div>
+</div>
 
 <!-- ─── Garden Overview Screen ─────────────────────────────────────── -->
 <div class="screen active" id="overviewScreen">
@@ -304,10 +336,13 @@ input, select, textarea { font-family:inherit; }
       <div class="header-title">Garden Journal</div>
       <div class="header-sub" id="zoneCountLabel">0 zones</div>
     </div>
-    <div class="level-badge">
-      <div class="level-label">Vision</div>
-      <div class="level-value" id="levelValue">Lv 1</div>
-      <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div class="level-badge">
+        <div class="level-label">Vision</div>
+        <div class="level-value" id="levelValue">Lv 1</div>
+        <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+      </div>
+      <button class="account-btn" id="accountBtn" title="Account">👤</button>
     </div>
   </div>
   <div class="zone-list" id="zoneList"></div>
@@ -496,6 +531,10 @@ const VISION_MODEL    = 'claude-sonnet-4-20250514';
 const VISION_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const VISION_MAX_TOKENS = 2000;
 
+// Supabase project credentials (anon/public key — safe to ship in client code).
+const SUPABASE_URL      = 'https://czoaeombqqhgyqbsetlj.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_LDKc3zPhBInG-DpInW0gLw_3GNt7MMP';
+
   __mods["src/config.js"].STORAGE_KEY_V1 = STORAGE_KEY_V1;
   __mods["src/config.js"].STORAGE_KEY = STORAGE_KEY;
   __mods["src/config.js"].ADD_HOLD_MS = ADD_HOLD_MS;
@@ -514,6 +553,8 @@ const VISION_MAX_TOKENS = 2000;
   __mods["src/config.js"].VISION_MODEL = VISION_MODEL;
   __mods["src/config.js"].VISION_ENDPOINT = VISION_ENDPOINT;
   __mods["src/config.js"].VISION_MAX_TOKENS = VISION_MAX_TOKENS;
+  __mods["src/config.js"].SUPABASE_URL = SUPABASE_URL;
+  __mods["src/config.js"].SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 }
 
 // ── src/data/schema.js ──
@@ -820,28 +861,378 @@ function createLocalRepo() {
   __mods["src/data/localRepo.js"].createLocalRepo = createLocalRepo;
 }
 
+// ── src/auth/supabaseClient.js ──
+{
+  __mods["src/auth/supabaseClient.js"] = {};
+  const { SUPABASE_URL, SUPABASE_ANON_KEY } = __mods["src/config.js"];
+
+// Current session access token — set by authManager after login/refresh.
+let _token = null;
+
+function setToken(token) { _token = token; }
+function clearToken()    { _token = null; }
+
+function _headers(extra) {
+  const h = { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY };
+  if (_token) h['Authorization'] = 'Bearer ' + _token;
+  if (extra) Object.assign(h, extra);
+  return h;
+}
+
+async function _throw(r) {
+  let data = {};
+  try { data = await r.json(); } catch (e) {}
+  throw new Error(data.error_description || data.message || data.msg || data.hint || ('HTTP ' + r.status));
+}
+
+// ── Auth (GoTrue REST API) ──────────────────────────────────────────────────
+
+async function authSignUp(email, password) {
+  const r = await fetch(SUPABASE_URL + '/auth/v1/signup', {
+    method: 'POST', headers: _headers(), body: JSON.stringify({ email, password }),
+  });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function authSignIn(email, password) {
+  const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+    method: 'POST', headers: _headers(), body: JSON.stringify({ email, password }),
+  });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function authRefresh(refreshTok) {
+  const r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST', headers: _headers(), body: JSON.stringify({ refresh_token: refreshTok }),
+  });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function authSignOut() {
+  await fetch(SUPABASE_URL + '/auth/v1/logout', { method: 'POST', headers: _headers() });
+}
+
+// ── Database (PostgREST) ────────────────────────────────────────────────────
+// params.filters: object like { 'user_id': 'eq.abc', 'zone_id': 'in.(a,b,c)' }
+// params.order:   string like 'created_at.asc'
+// params.select:  column list like 'id,name,type'
+
+async function dbSelect(table, params) {
+  const q = new URLSearchParams();
+  const p = params || {};
+  if (p.select) q.set('select', p.select);
+  if (p.order)  q.set('order',  p.order);
+  const filters = p.filters || {};
+  for (const [k, v] of Object.entries(filters)) q.set(k, v);
+  const qs = q.toString();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs ? '?' + qs : ''}`, { headers: _headers() });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function dbInsert(table, row) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: _headers({ 'Prefer': 'return=representation' }),
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function dbUpsert(table, row) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: _headers({ 'Prefer': 'return=representation,resolution=merge-duplicates' }),
+    body: JSON.stringify(row),
+  });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function dbUpdate(table, filters, patch) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) q.set(k, v);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${q}`, {
+    method: 'PATCH',
+    headers: _headers({ 'Prefer': 'return=representation' }),
+    body: JSON.stringify(patch),
+  });
+  if (!r.ok) await _throw(r);
+  return r.json();
+}
+
+async function dbDelete(table, filters) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) q.set(k, v);
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${q}`, {
+    method: 'DELETE', headers: _headers(),
+  });
+  if (!r.ok) await _throw(r);
+}
+
+  __mods["src/auth/supabaseClient.js"].setToken = setToken;
+  __mods["src/auth/supabaseClient.js"].clearToken = clearToken;
+  __mods["src/auth/supabaseClient.js"].authSignUp = authSignUp;
+  __mods["src/auth/supabaseClient.js"].authSignIn = authSignIn;
+  __mods["src/auth/supabaseClient.js"].authRefresh = authRefresh;
+  __mods["src/auth/supabaseClient.js"].authSignOut = authSignOut;
+  __mods["src/auth/supabaseClient.js"].dbSelect = dbSelect;
+  __mods["src/auth/supabaseClient.js"].dbInsert = dbInsert;
+  __mods["src/auth/supabaseClient.js"].dbUpsert = dbUpsert;
+  __mods["src/auth/supabaseClient.js"].dbUpdate = dbUpdate;
+  __mods["src/auth/supabaseClient.js"].dbDelete = dbDelete;
+}
+
+// ── src/data/supabaseRepo.js ──
+{
+  __mods["src/data/supabaseRepo.js"] = {};
+  const { dbSelect, dbInsert, dbUpsert, dbUpdate, dbDelete } = __mods["src/auth/supabaseClient.js"];
+  const { emptyDB, newId } = __mods["src/data/schema.js"];
+
+
+// Write-through in-memory repo backed by Supabase.
+// Reads are synchronous (from in-memory cache seeded on login).
+// Writes update the cache immediately and push to Supabase fire-and-forget.
+async function createSupabaseRepo(session) {
+  const uid = session.user_id;
+  const db  = emptyDB();
+
+  // ── Seed from Supabase ──────────────────────────────────────────────────
+  async function seed() {
+    const [profiles, gardens] = await Promise.all([
+      dbSelect('user_profiles', { filters: { 'id': 'eq.' + uid } }),
+      dbSelect('gardens', { filters: { 'user_id': 'eq.' + uid }, order: 'created_at.asc' }),
+    ]);
+
+    const profile = profiles[0] || null;
+    if (profile) {
+      db.user  = { ...db.user, ...profile };
+      db.xp    = profile.xp    ?? 0;
+      db.level = profile.level ?? 1;
+    } else {
+      const np = { id: uid, email: session.email || null, xp: 0, level: 1, share_data_globally: true, created_at: Date.now() };
+      db.user  = { ...db.user, ...np };
+      dbInsert('user_profiles', np).catch(e => console.warn('init user_profiles:', e));
+    }
+    db.user.id = uid;
+    db.gardens = gardens || [];
+
+    if (db.gardens.length === 0) {
+      const g = { id: newId('g'), user_id: uid, name: 'My Garden', created_at: Date.now() };
+      db.gardens.push(g);
+      dbInsert('gardens', g).catch(e => console.warn('init garden:', e));
+    }
+
+    const gardenIds = db.gardens.map(g => g.id);
+    const inG = 'in.(' + gardenIds.join(',') + ')';
+    const zones = await dbSelect('zones', { filters: { 'garden_id': inG }, order: 'created_at.asc' });
+    db.zones = zones || [];
+
+    if (db.zones.length === 0) {
+      db.plants = [];
+      db.journal_entries = [];
+      return;
+    }
+
+    const zoneIds = db.zones.map(z => z.id);
+    const inZ = 'in.(' + zoneIds.join(',') + ')';
+    const [plants, journal] = await Promise.all([
+      dbSelect('plants', { filters: { 'zone_id': inZ }, order: 'created_at.asc' }),
+      dbSelect('journal_entries', { filters: { 'zone_id': inZ }, order: 'created_at.asc' }),
+    ]);
+    db.plants          = plants  || [];
+    db.journal_entries = journal || [];
+  }
+
+  await seed();
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function push(fn) { fn().catch(e => console.warn('Supabase sync error:', e)); }
+
+  function ensureDefaultGarden() {
+    if (db.gardens.length > 0) return db.gardens[0];
+    const g = { id: newId('g'), user_id: uid, name: 'My Garden', created_at: Date.now() };
+    db.gardens.push(g);
+    push(() => dbInsert('gardens', g));
+    return g;
+  }
+
+  // ── Repo interface (mirrors localRepo) ───────────────────────────────────
+  return {
+    raw:   () => db,
+    save:  () => {},
+    newId,
+
+    user: {
+      get: () => db.user,
+      update: (patch) => {
+        db.user = { ...db.user, ...patch };
+        push(() => dbUpsert('user_profiles', { ...db.user, id: uid }));
+        return db.user;
+      },
+    },
+
+    gardens: {
+      list:         () => db.gardens.slice(),
+      get:          (id) => db.gardens.find(g => g.id === id),
+      ensureDefault: ensureDefaultGarden,
+    },
+
+    zones: {
+      list:        () => db.zones.slice(),
+      listByGarden: (gardenId) => db.zones.filter(z => z.garden_id === gardenId),
+      get:         (id) => db.zones.find(z => z.id === id),
+      create: ({ name, type, reference_image_path = null }) => {
+        const garden = ensureDefaultGarden();
+        const z = { id: newId('z'), garden_id: garden.id, name, type, reference_image_path, fingerprint: null, created_at: Date.now() };
+        db.zones.push(z);
+        push(() => dbInsert('zones', z));
+        return z;
+      },
+      update: (id, patch) => {
+        const z = db.zones.find(zz => zz.id === id);
+        if (!z) return null;
+        Object.assign(z, patch);
+        push(() => dbUpdate('zones', { 'id': 'eq.' + id }, patch));
+        return z;
+      },
+      delete: (id) => {
+        db.zones          = db.zones.filter(z => z.id !== id);
+        db.plants         = db.plants.filter(p => p.zone_id !== id);
+        db.journal_entries = db.journal_entries.filter(j => j.zone_id !== id);
+        push(() => dbDelete('zones', { 'id': 'eq.' + id }));
+      },
+    },
+
+    plants: {
+      listByZone: (zoneId, opts) => {
+        const incDel = (opts || {}).includeDeleted;
+        const ps = db.plants.filter(p => p.zone_id === zoneId);
+        return incDel ? ps : ps.filter(p => !p.deleted);
+      },
+      get: (id) => db.plants.find(p => p.id === id),
+      create: (plant) => {
+        const p = {
+          id: plant.id || newId('p'),
+          zone_id: plant.zone_id,
+          sub_zone_id: plant.sub_zone_id || null,
+          display_label: plant.display_label || plant.species || 'Unknown',
+          species: plant.species || null,
+          species_canonical: (plant.species || '').toLowerCase() || null,
+          species_locked: !!plant.species_locked,
+          category: plant.category || 'unknown',
+          container_description: plant.container_description || null,
+          secondary_identifiers: plant.secondary_identifiers || null,
+          x: plant.x, y: plant.y,
+          pending: !!plant.pending,
+          confidence: plant.confidence ?? null,
+          custom: !!plant.custom,
+          notes: plant.notes || '',
+          deleted: false,
+          created_at: plant.created_at || Date.now(),
+        };
+        db.plants.push(p);
+        push(() => dbInsert('plants', p));
+        return p;
+      },
+      update: (id, patch) => {
+        const p = db.plants.find(pp => pp.id === id);
+        if (!p) return null;
+        Object.assign(p, patch);
+        if (patch.species !== undefined) p.species_canonical = (patch.species || '').toLowerCase() || null;
+        const dbPatch = { ...patch, species_canonical: p.species_canonical };
+        push(() => dbUpdate('plants', { 'id': 'eq.' + id }, dbPatch));
+        return p;
+      },
+      softDelete: (id) => {
+        const p = db.plants.find(pp => pp.id === id);
+        if (p) {
+          p.deleted = true;
+          push(() => dbUpdate('plants', { 'id': 'eq.' + id }, { deleted: true }));
+        }
+      },
+    },
+
+    journal: {
+      listByZone: (zoneId) => db.journal_entries.filter(j => j.zone_id === zoneId),
+      append: (entry) => {
+        const j = {
+          id: entry.id || newId('j'),
+          zone_id: entry.zone_id,
+          entry_date: entry.entry_date || Date.now(),
+          photo_path: entry.photo_path || null,
+          vision_data: entry.vision_data || null,
+          user_corrections: entry.user_corrections || null,
+          overall_health_note: entry.overall_health_note || null,
+          plant_count: entry.plant_count || 0,
+          contributes_to_global: !!entry.contributes_to_global,
+          created_at: Date.now(),
+        };
+        db.journal_entries.push(j);
+        push(() => dbInsert('journal_entries', j));
+        return j;
+      },
+    },
+
+    progress: {
+      get: () => ({ xp: db.xp, level: db.level }),
+      set: ({ xp, level }) => {
+        db.xp    = xp;
+        db.level = level;
+        db.user.xp    = xp;
+        db.user.level = level;
+        push(() => dbUpdate('user_profiles', { 'id': 'eq.' + uid }, { xp, level }));
+      },
+    },
+  };
+}
+
+  __mods["src/data/supabaseRepo.js"].createSupabaseRepo = createSupabaseRepo;
+}
+
 // ── src/data/repo.js ──
 {
   __mods["src/data/repo.js"] = {};
   const { createLocalRepo } = __mods["src/data/localRepo.js"];
+  const { createSupabaseRepo } = __mods["src/data/supabaseRepo.js"];
 // Repo factory. UI code imports `repo` from here and never talks to storage directly.
 //
-// Today: localRepo (synchronous, localStorage-backed).
-// Tomorrow: supabaseRepo (asynchronous, network-backed). When that swap happens,
-// update the export below and add `await` to call sites in UI screens.
-//
-// Method shapes are deliberately small and table-like so they map directly to
-// Supabase queries. Anything more complex (joins, aggregates) is a UI concern
-// and should be composed at the call site, not buried here.
+// Starts as localRepo (synchronous, localStorage-backed).
+// After auth completes, activateSupabase() seeds and swaps to supabaseRepo.
+// The `repo` proxy object uses getters so all importers transparently see the
+// new backend without holding stale references.
 
 
-// import { createSupabaseRepo } from './supabaseRepo.js';
 
-const repo = createLocalRepo();
-// To swap backends later:
-//   export const repo = createSupabaseRepo({ url: '...', anonKey: '...' });
+let _backend = createLocalRepo();
+
+// Proxy that always delegates to the current backend via getters.
+// Importers capture this object once; getters re-read _backend on every call.
+const repo = {
+  get user()    { return _backend.user; },
+  get gardens() { return _backend.gardens; },
+  get zones()   { return _backend.zones; },
+  get plants()  { return _backend.plants; },
+  get journal() { return _backend.journal; },
+  get progress(){ return _backend.progress; },
+  newId: (...a) => _backend.newId(...a),
+  save:  ()    => _backend.save(),
+  raw:   ()    => _backend.raw(),
+};
+
+// Called by main.js after successful auth. Seeds from Supabase then swaps backend.
+async function activateSupabase(session) {
+  const sbRepo = await createSupabaseRepo(session);
+  _backend = sbRepo;
+  return repo;
+}
 
   __mods["src/data/repo.js"].repo = repo;
+  __mods["src/data/repo.js"].activateSupabase = activateSupabase;
 }
 
 // ── src/state/session.js ──
@@ -852,6 +1243,7 @@ const repo = createLocalRepo();
 // re-render in response, instead of calling each other directly.
 
 const session = {
+  currentUser: null,   // { user_id, email } — populated after auth
   currentZoneId: null,
   currentTab: 'map',
 
@@ -902,11 +1294,136 @@ const EV = {
   __mods["src/state/session.js"].EV = EV;
 }
 
+// ── src/auth/authManager.js ──
+{
+  __mods["src/auth/authManager.js"] = {};
+  const { authSignIn, authSignUp, authRefresh, authSignOut, setToken, clearToken } = __mods["src/auth/supabaseClient.js"];
+
+const STORAGE_KEY = 'garden_auth_v1';
+
+// { user_id, email, access_token, refresh_token, expires_at }
+let _session = null;
+
+function getSession() { return _session; }
+
+function _fromData(data) {
+  const user = data.user || {};
+  return {
+    user_id:       user.id  || data.user_id  || null,
+    email:         user.email || data.email  || null,
+    access_token:  data.access_token         || null,
+    refresh_token: data.refresh_token        || null,
+    expires_at:    Date.now() + ((data.expires_in || 3600) * 1000),
+  };
+}
+
+function _persist(s) {
+  _session = s;
+  if (s) {
+    setToken(s.access_token);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) {}
+  } else {
+    clearToken();
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+}
+
+// Try to restore a prior session from localStorage.
+// Returns a session object on success, null if not authenticated.
+async function initAuth() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const stored = JSON.parse(raw);
+    if (!stored.refresh_token) return null;
+    const data = await authRefresh(stored.refresh_token);
+    const s = _fromData(data);
+    _persist(s);
+    return s;
+  } catch (e) {
+    _persist(null);
+    return null;
+  }
+}
+
+async function login(email, password) {
+  const data = await authSignIn(email, password);
+  const s = _fromData(data);
+  _persist(s);
+  return s;
+}
+
+async function signup(email, password) {
+  const data = await authSignUp(email, password);
+  // If Supabase returned a session directly (email confirmation disabled), use it.
+  if (data.access_token) {
+    const s = _fromData(data);
+    _persist(s);
+    return s;
+  }
+  // Email confirmation required — caller should show "check your email" message.
+  return null;
+}
+
+async function logout() {
+  const s = _session;
+  _persist(null);
+  if (s) await authSignOut().catch(() => {});
+}
+
+  __mods["src/auth/authManager.js"].getSession = getSession;
+  __mods["src/auth/authManager.js"].initAuth = initAuth;
+  __mods["src/auth/authManager.js"].login = login;
+  __mods["src/auth/authManager.js"].signup = signup;
+  __mods["src/auth/authManager.js"].logout = logout;
+}
+
+// ── src/data/actionsLog.js ──
+{
+  __mods["src/data/actionsLog.js"] = {};
+  const { getSession } = __mods["src/auth/authManager.js"];
+  const { dbInsert } = __mods["src/auth/supabaseClient.js"];
+
+
+// Fields allowed in the anonymized global log (no PII, no user-generated text).
+const GLOBAL_SAFE_FIELDS = ['plant_count', 'zone_type', 'confidence', 'category', 'amount'];
+
+function sanitizeForGlobal(payload) {
+  const safe = {};
+  for (const k of GLOBAL_SAFE_FIELDS) {
+    if (payload[k] !== undefined) safe[k] = payload[k];
+  }
+  return safe;
+}
+
+// Fire-and-forget dual-write. Never throws.
+// Writes to user_action_log (private, full payload) and
+// global_action_log (anonymized, numeric/categorical fields only).
+function logAction(type, payload) {
+  const s = getSession();
+  if (!s) return;
+  const now = new Date().toISOString();
+  const p = payload || {};
+
+  dbInsert('user_action_log', {
+    user_id: s.user_id, action_type: type, payload: p, created_at: now,
+  }).catch(e => console.warn('user_action_log write failed:', e));
+
+  dbInsert('global_action_log', {
+    action_type: type, payload: sanitizeForGlobal(p), created_at: now,
+  }).catch(e => console.warn('global_action_log write failed:', e));
+}
+
+  __mods["src/data/actionsLog.js"].logAction = logAction;
+}
+
 // ── src/state/xp.js ──
 {
   __mods["src/state/xp.js"] = {};
   const { repo } = __mods["src/data/repo.js"];
   const { events, EV } = __mods["src/state/session.js"];
+  const { logAction } = __mods["src/data/actionsLog.js"];
+
 
 
 function xpForLevel(level) {
@@ -923,6 +1440,7 @@ function awardXP(amount, reason) {
     leveled = true;
   }
   repo.progress.set({ xp, level });
+  logAction('xp_earned', { amount, reason });
   events.emit(EV.PROGRESS_CHANGED, { xp, level, leveled, amount, reason });
   if (leveled) {
     events.emit(EV.TOAST, { msg: `Level up! Vision is now Lv ${level}`, kind: 'xp' });
@@ -1088,6 +1606,8 @@ function initCarePanel() {
   const { repo } = __mods["src/data/repo.js"];
   const { session, events, EV } = __mods["src/state/session.js"];
   const { awardXP } = __mods["src/state/xp.js"];
+  const { logAction } = __mods["src/data/actionsLog.js"];
+
 
 
 
@@ -1141,12 +1661,14 @@ function initPlantDialog() {
     const notesVal = notes.value.trim();
 
     if (session.editingPlantId) {
+      const old = repo.plants.get(session.editingPlantId);
       repo.plants.update(session.editingPlantId, {
         display_label: nameVal,
         species: nameVal,
         category: catVal,
         notes: notesVal,
       });
+      logAction('plant_edited', { species_canonical: nameVal.toLowerCase(), old_species: old ? (old.species || '').toLowerCase() : null, category: catVal });
     } else if (session.pendingPos && session.currentZoneId) {
       repo.plants.create({
         zone_id: session.currentZoneId,
@@ -1158,6 +1680,7 @@ function initPlantDialog() {
         y: session.pendingPos.y,
         custom: true,
       });
+      logAction('plant_added_custom', { species_canonical: nameVal.toLowerCase(), category: catVal });
       awardXP(2, 'Manual tag added');
     }
 
@@ -1189,6 +1712,8 @@ function initPlantDialog() {
   const { repo } = __mods["src/data/repo.js"];
   const { session, events, EV } = __mods["src/state/session.js"];
   const { awardXP } = __mods["src/state/xp.js"];
+  const { logAction } = __mods["src/data/actionsLog.js"];
+
 
 
 
@@ -1240,8 +1765,9 @@ function initZoneDialog({ onAfterDelete }) {
     if (session.pendingZoneId) {
       repo.zones.update(session.pendingZoneId, { name, type: typeInp.value });
     } else {
-      repo.zones.create({ name, type: typeInp.value });
+      const z = repo.zones.create({ name, type: typeInp.value });
       awardXP(5, 'New zone created');
+      logAction('zone_created', { zone_type: typeInp.value, zone_id: z.id });
     }
     events.emit(EV.ZONES_CHANGED);
     close();
@@ -2322,6 +2848,8 @@ function parseExifDate(dateStr) {
   const { randomPhrase } = __mods["src/assets/loadingPhrases.js"];
   const { DEV_TEST_IMAGE } = __mods["src/assets/devTestImage.js"];
   const { extractCaptureDate } = __mods["src/image/exif.js"];
+  const { logAction } = __mods["src/data/actionsLog.js"];
+
 
 
 
@@ -2505,6 +3033,9 @@ function initReview() {
     renderMarkers();
     renderList();
     updateAcceptLabel();
+
+    const z = repo.zones.get(session.currentZoneId);
+    logAction('photo_analyzed', { plant_count: pendingTags.length, zone_type: z ? z.type : null });
   }
 
   function renderMarkers() {
@@ -2656,6 +3187,12 @@ function initReview() {
         pending: !!t.pending,
         custom: !!t.custom,
       });
+      logAction('plant_confirmed', {
+        species_canonical: (t.name || '').toLowerCase() || null,
+        confidence: t.confidence ?? null,
+        category: t.category || 'unknown',
+        zone_type: z.type,
+      });
     });
     const dateInput = document.getElementById('reviewDateInput');
     const entryDate = parseDatetimeLocal(dateInput.value) ?? Date.now();
@@ -2667,6 +3204,7 @@ function initReview() {
       plant_count: accepted.length,
       overall_health_note: `${accepted.length} plants tagged from photo`,
     });
+    logAction('journal_entry_saved', { zone_id: z.id, plant_count: accepted.length });
 
     awardXP(10 + accepted.length * 2, `Photo analyzed (${accepted.length} plants)`);
     events.emit(EV.PLANTS_CHANGED,  { zoneId: z.id });
@@ -2908,6 +3446,8 @@ function initReview() {
     const accepted = pendingTags.filter(t => t.accepted);
     const rejected = pendingTags.filter(t => !t.accepted);
 
+    rejected.forEach(() => logAction('plant_rejected', { zone_id: session.currentZoneId }));
+
     if (rejected.length > 0) {
       await startReIDFlow(session.currentZoneId, accepted, rejected);
     } else {
@@ -2926,10 +3466,85 @@ function initReview() {
   __mods["src/ui/review.js"].initReview = initReview;
 }
 
+// ── src/auth/authUI.js ──
+{
+  __mods["src/auth/authUI.js"] = {};
+  const { $ } = __mods["src/ui/dom.js"];
+  const { login, signup } = __mods["src/auth/authManager.js"];
+
+
+function initAuthUI({ onLogin }) {
+  const overlay   = $('authOverlay');
+  const emailInp  = $('authEmail');
+  const passInp   = $('authPassword');
+  const submitBtn = $('authSubmit');
+  const toggleBtn = $('authToggle');
+  const errorEl   = $('authError');
+  const subEl     = $('authSub');
+
+  let mode = 'login';
+
+  function setMode(m) {
+    mode = m;
+    errorEl.style.display = 'none';
+    if (m === 'login') {
+      subEl.textContent    = 'Sign in to your garden';
+      submitBtn.textContent = 'Sign In';
+      toggleBtn.textContent = "No account? Sign up";
+    } else {
+      subEl.textContent    = 'Create your garden account';
+      submitBtn.textContent = 'Create Account';
+      toggleBtn.textContent = "Already have an account? Sign in";
+    }
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.style.display = '';
+  }
+
+  async function attempt() {
+    const email = emailInp.value.trim();
+    const pass  = passInp.value;
+    if (!email || !pass) { showError('Email and password are required.'); return; }
+    submitBtn.disabled = true;
+    submitBtn.textContent = mode === 'login' ? 'Signing in…' : 'Creating account…';
+    errorEl.style.display = 'none';
+    try {
+      const session = mode === 'login' ? await login(email, pass) : await signup(email, pass);
+      if (session) {
+        overlay.classList.remove('active');
+        onLogin(session);
+      } else {
+        showError('Check your email to confirm your account, then sign in.');
+        setMode('login');
+      }
+    } catch (e) {
+      showError(e.message || 'Authentication failed. Please try again.');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+    }
+  }
+
+  submitBtn.addEventListener('click', attempt);
+  passInp.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+  toggleBtn.addEventListener('click', () => setMode(mode === 'login' ? 'signup' : 'login'));
+
+  setMode('login');
+
+  return {
+    show: () => { overlay.classList.add('active'); emailInp.focus(); },
+  };
+}
+
+  __mods["src/auth/authUI.js"].initAuthUI = initAuthUI;
+}
+
 // ── src/main.js ──
 {
   __mods["src/main.js"] = {};
-  const { repo } = __mods["src/data/repo.js"];
+  const { repo, activateSupabase } = __mods["src/data/repo.js"];
   const { events, EV, session } = __mods["src/state/session.js"];
   const { awardXP } = __mods["src/state/xp.js"];
   const { $ } = __mods["src/ui/dom.js"];
@@ -2940,8 +3555,11 @@ function initReview() {
   const { initZone } = __mods["src/ui/zone.js"];
   const { initOverview, showOverview: showOverviewScreen } = __mods["src/ui/overview.js"];
   const { initReview } = __mods["src/ui/review.js"];
-// Entry point. Imports every module and wires the cross-module callbacks
-// here, so each UI module stays unaware of the others' internals.
+  const { initAuth, logout } = __mods["src/auth/authManager.js"];
+  const { initAuthUI } = __mods["src/auth/authUI.js"];
+  const { logAction } = __mods["src/data/actionsLog.js"];
+// Entry point. Wires all modules together behind an auth gate.
+// Auth check happens first; the app does not init until a session exists.
 
 
 
@@ -2954,128 +3572,152 @@ function initReview() {
 
 
 
+
+
+
+// Toast must be active before anything can emit EV.TOAST (including auth errors).
 initToast();
 
-const carePanel  = initCarePanel();
-const plantDlg   = initPlantDialog();
-const zoneDlg    = initZoneDialog({
-  onAfterDelete: () => events.emit(EV.NAV_OVERVIEW),
-});
+(async () => {
+  let authUI;
 
-const zoneScreen = initZone({
-  onPlantTap:        (id) => plantDlg.open(id),
-  onPlantDoubleTap:  (id) => carePanel.openById(id),
-  onPlantLongPressDone: () => { /* drag has started — no-op */ },
-  onAddPlantAtPct:   () => plantDlg.openNew(),
-});
+  async function startApp(authSession) {
+    session.currentUser = { user_id: authSession.user_id, email: authSession.email };
 
-const review = initReview();
+    // Seed in-memory store from Supabase and swap the backend.
+    try {
+      await activateSupabase(authSession);
+    } catch (e) {
+      events.emit(EV.TOAST, { msg: 'Failed to load your data: ' + (e.message || e), kind: 'error' });
+      console.error('activateSupabase failed:', e);
+    }
 
-// Two file inputs, one per flow. Each is wired to a <label for="..."> in
-// the markup so the picker opens via native HTML semantics — no
-// programmatic .click(), which sandboxed iframes block.
-const photoInput        = $('photoInput');         // additional uploads on the current zone
-const photoInputNewZone = $('photoInputNewZone');  // FAB → new zone, then upload
-
-photoInput.addEventListener('change', async (e) => {
-  try {
-    const file = e.target.files[0];
-    photoInput.value = '';
-    if (!file) return;
-    events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
-    await review.handlePhoto(file);
-  } catch (err) {
-    events.emit(EV.TOAST, { msg: 'Upload failed: ' + (err.message || err), kind: 'error' });
-    console.error('photoInput change error:', err);
-  }
-});
-
-photoInputNewZone.addEventListener('change', async (e) => {
-  try {
-    const file = e.target.files[0];
-    photoInputNewZone.value = '';
-    if (!file) return;
-    events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
-
-    const z = repo.zones.create({
-      name: `Zone ${repo.zones.list().length + 1}`,
-      type: 'bed',
+    // ── UI init ────────────────────────────────────────────────────────────
+    const carePanel  = initCarePanel();
+    const plantDlg   = initPlantDialog();
+    const zoneDlg    = initZoneDialog({
+      onAfterDelete: () => events.emit(EV.NAV_OVERVIEW),
     });
-    awardXP(5, 'New zone created');
-    events.emit(EV.ZONES_CHANGED);
-    zoneScreen.show(z.id);
-    await review.handlePhoto(file);
-  } catch (err) {
-    events.emit(EV.TOAST, { msg: 'Upload failed: ' + (err.message || err), kind: 'error' });
-    console.error('photoInputNewZone change error:', err);
-  }
-});
 
-const overview = initOverview({
-  onZoneOpen: (zoneId) => zoneScreen.show(zoneId),
-  onUploadForNewZone: () => { /* label opens picker natively — nothing to do here */ },
-  onDevCreateZone: async () => {
-    const z = repo.zones.create({
-      name: `Zone ${repo.zones.list().length + 1}`,
-      type: 'patio',
+    const zoneScreen = initZone({
+      onPlantTap:           (id) => plantDlg.open(id),
+      onPlantDoubleTap:     (id) => carePanel.openById(id),
+      onPlantLongPressDone: () => {},
+      onAddPlantAtPct:      () => plantDlg.openNew(),
     });
-    awardXP(5, 'New zone created (dev test)');
-    events.emit(EV.ZONES_CHANGED);
-    zoneScreen.show(z.id);
-    await review.handleDevPhoto();
-  },
-});
 
-// Upload-photo button on a zone with no reference photo yet.
-// Same pattern: it's a <label for="photoInput">, and long-press calls
-// preventDefault on the click to suppress the native picker so the dev
-// image flow can take over.
-const uploadInitialBtn = $('uploadInitialBtn');
-let uploadBtnHoldTimer = null;
-let uploadBtnIsLongPress = false;
-uploadInitialBtn.addEventListener('pointerdown', () => {
-  uploadBtnIsLongPress = false;
-  if (uploadBtnHoldTimer) clearTimeout(uploadBtnHoldTimer);
-  uploadBtnHoldTimer = setTimeout(() => {
-    uploadBtnHoldTimer = null;
-    uploadBtnIsLongPress = true;
-    if (navigator.vibrate) navigator.vibrate(30);
-    events.emit(EV.TOAST, { msg: 'Dev: using test image…' });
-    review.handleDevPhoto();
-  }, 800);
-});
-['pointerup','pointerleave','pointercancel'].forEach(ev => {
-  uploadInitialBtn.addEventListener(ev, () => {
-    if (uploadBtnHoldTimer) { clearTimeout(uploadBtnHoldTimer); uploadBtnHoldTimer = null; }
-  });
-});
-uploadInitialBtn.addEventListener('click', (e) => {
-  if (uploadBtnIsLongPress) {
-    e.preventDefault();          // stop the native picker from opening
-    uploadBtnIsLongPress = false;
+    const review = initReview();
+
+    // Two file inputs, one per flow. Labels open the native picker.
+    const photoInput        = $('photoInput');
+    const photoInputNewZone = $('photoInputNewZone');
+
+    photoInput.addEventListener('change', async (e) => {
+      try {
+        const file = e.target.files[0];
+        photoInput.value = '';
+        if (!file) return;
+        events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
+        await review.handlePhoto(file);
+      } catch (err) {
+        events.emit(EV.TOAST, { msg: 'Upload failed: ' + (err.message || err), kind: 'error' });
+        console.error('photoInput change error:', err);
+      }
+    });
+
+    photoInputNewZone.addEventListener('change', async (e) => {
+      try {
+        const file = e.target.files[0];
+        photoInputNewZone.value = '';
+        if (!file) return;
+        events.emit(EV.TOAST, { msg: `Picked: ${file.name}` });
+        const z = repo.zones.create({ name: `Zone ${repo.zones.list().length + 1}`, type: 'bed' });
+        awardXP(5, 'New zone created');
+        logAction('zone_created', { zone_type: 'bed', zone_id: z.id });
+        events.emit(EV.ZONES_CHANGED);
+        zoneScreen.show(z.id);
+        await review.handlePhoto(file);
+      } catch (err) {
+        events.emit(EV.TOAST, { msg: 'Upload failed: ' + (err.message || err), kind: 'error' });
+        console.error('photoInputNewZone change error:', err);
+      }
+    });
+
+    const overview = initOverview({
+      onZoneOpen:          (zoneId) => zoneScreen.show(zoneId),
+      onUploadForNewZone:  () => {},
+      onDevCreateZone: async () => {
+        const z = repo.zones.create({ name: `Zone ${repo.zones.list().length + 1}`, type: 'patio' });
+        awardXP(5, 'New zone created (dev test)');
+        logAction('zone_created', { zone_type: 'patio', zone_id: z.id });
+        events.emit(EV.ZONES_CHANGED);
+        zoneScreen.show(z.id);
+        await review.handleDevPhoto();
+      },
+    });
+
+    const uploadInitialBtn = $('uploadInitialBtn');
+    let uploadBtnHoldTimer = null;
+    let uploadBtnIsLongPress = false;
+    uploadInitialBtn.addEventListener('pointerdown', () => {
+      uploadBtnIsLongPress = false;
+      if (uploadBtnHoldTimer) clearTimeout(uploadBtnHoldTimer);
+      uploadBtnHoldTimer = setTimeout(() => {
+        uploadBtnHoldTimer = null;
+        uploadBtnIsLongPress = true;
+        if (navigator.vibrate) navigator.vibrate(30);
+        events.emit(EV.TOAST, { msg: 'Dev: using test image…' });
+        review.handleDevPhoto();
+      }, 800);
+    });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => {
+      uploadInitialBtn.addEventListener(ev, () => {
+        if (uploadBtnHoldTimer) { clearTimeout(uploadBtnHoldTimer); uploadBtnHoldTimer = null; }
+      });
+    });
+    uploadInitialBtn.addEventListener('click', (e) => {
+      if (uploadBtnIsLongPress) { e.preventDefault(); uploadBtnIsLongPress = false; }
+    });
+
+    // Account / logout button
+    const accountBtn = $('accountBtn');
+    if (accountBtn) {
+      accountBtn.addEventListener('click', async () => {
+        const email = session.currentUser ? session.currentUser.email : 'signed in';
+        const confirmed = confirm(`Signed in as ${email}\n\nSign out?`);
+        if (confirmed) {
+          await logout();
+          window.location.reload();
+        }
+      });
+    }
+
+    // Cross-module navigation
+    events.on(EV.NAV_OVERVIEW, () => {
+      session.currentZoneId = null;
+      showOverviewScreen();
+      overview.renderZoneList();
+      overview.renderLevel();
+    });
+    events.on(EV.NAV_ZONE, ({ zoneId }) => zoneScreen.show(zoneId));
+    events.on('zone:edit', ({ zoneId }) => zoneDlg.open(zoneId));
+    events.on('care:close', () => carePanel.close());
+
+    // Initial render
+    overview.renderZoneList();
+    overview.renderLevel();
   }
-  // Otherwise: let the label do its thing → native picker opens.
-});
 
-// Cross-module navigation
-events.on(EV.NAV_OVERVIEW, () => {
-  session.currentZoneId = null;
-  showOverviewScreen();
-  overview.renderZoneList();
-  overview.renderLevel();
-});
+  // ── Auth init ────────────────────────────────────────────────────────────
+  authUI = initAuthUI({ onLogin: (s) => startApp(s) });
 
-events.on(EV.NAV_ZONE, ({ zoneId }) => zoneScreen.show(zoneId));
-
-// Zone edit dialog opens on zone menu tap.
-events.on('zone:edit', ({ zoneId }) => zoneDlg.open(zoneId));
-
-// Care panel close from gesture handler in zone.js.
-events.on('care:close', () => carePanel.close());
-
-// Initial render.
-overview.renderZoneList();
-overview.renderLevel();
+  const existingSession = await initAuth();
+  if (existingSession) {
+    await startApp(existingSession);
+  } else {
+    authUI.show();
+  }
+})();
 
 
 }

@@ -1,5 +1,6 @@
 import { repo } from '../data/repo.js';
 import { events, EV } from './session.js';
+import { logAction } from '../data/actionsLog.js';
 
 export function xpForLevel(level) {
   return Math.round(50 * Math.pow(level, 1.4));
@@ -15,6 +16,7 @@ export function awardXP(amount, reason) {
     leveled = true;
   }
   repo.progress.set({ xp, level });
+  logAction('xp_earned', { amount, reason });
   events.emit(EV.PROGRESS_CHANGED, { xp, level, leveled, amount, reason });
   if (leveled) {
     events.emit(EV.TOAST, { msg: `Level up! Vision is now Lv ${level}`, kind: 'xp' });

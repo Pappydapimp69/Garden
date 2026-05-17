@@ -2,6 +2,7 @@ import { $ } from './dom.js';
 import { repo } from '../data/repo.js';
 import { session, events, EV } from '../state/session.js';
 import { awardXP } from '../state/xp.js';
+import { logAction } from '../data/actionsLog.js';
 
 export function initZoneDialog({ onAfterDelete }) {
   const dlg     = $('zoneDialog');
@@ -50,8 +51,9 @@ export function initZoneDialog({ onAfterDelete }) {
     if (session.pendingZoneId) {
       repo.zones.update(session.pendingZoneId, { name, type: typeInp.value });
     } else {
-      repo.zones.create({ name, type: typeInp.value });
+      const z = repo.zones.create({ name, type: typeInp.value });
       awardXP(5, 'New zone created');
+      logAction('zone_created', { zone_type: typeInp.value, zone_id: z.id });
     }
     events.emit(EV.ZONES_CHANGED);
     close();

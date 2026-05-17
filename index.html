@@ -8,6 +8,20 @@
 </head>
 <body>
 
+<!-- ─── Auth Overlay ────────────────────────────────────────────────── -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <div class="auth-logo">🌱</div>
+    <h2 class="auth-title">Garden Journal</h2>
+    <p class="auth-sub" id="authSub">Sign in to your garden</p>
+    <div class="auth-error" id="authError" style="display:none"></div>
+    <input type="email"    id="authEmail"    placeholder="Email" autocomplete="email">
+    <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password">
+    <button class="btn btn-confirm auth-submit" id="authSubmit">Sign In</button>
+    <button class="auth-toggle" id="authToggle">No account? Sign up</button>
+  </div>
+</div>
+
 <!-- ─── Garden Overview Screen ─────────────────────────────────────── -->
 <div class="screen active" id="overviewScreen">
   <div class="header">
@@ -15,10 +29,13 @@
       <div class="header-title">Garden Journal</div>
       <div class="header-sub" id="zoneCountLabel">0 zones</div>
     </div>
-    <div class="level-badge">
-      <div class="level-label">Vision</div>
-      <div class="level-value" id="levelValue">Lv 1</div>
-      <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div class="level-badge">
+        <div class="level-label">Vision</div>
+        <div class="level-value" id="levelValue">Lv 1</div>
+        <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+      </div>
+      <button class="account-btn" id="accountBtn" title="Account">👤</button>
     </div>
   </div>
   <div class="zone-list" id="zoneList"></div>
