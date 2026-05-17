@@ -15,12 +15,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Read version
+        id: version
+        run: echo "version=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
       - name: Build artifact
         run: node build.mjs --artifact
+      - name: Create versioned copy
+        run: cp dist/garden-artifact.html dist/garden-artifact-v${{ steps.version.outputs.version }}.html
       - name: Publish to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-build
-          name: Latest Build
+          name: "Garden Journal v${{ steps.version.outputs.version }}"
           prerelease: true
-          files: dist/garden-artifact.html
+          files: |
+            dist/garden-artifact.html
+            dist/garden-artifact-v${{ steps.version.outputs.version }}.html
