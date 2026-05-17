@@ -6,6 +6,7 @@ import { CONF_HIGH, CONF_MED } from '../config.js';
 import { processUpload, cropFromImage } from '../image/process.js';
 import { analyzeFullPhoto } from '../vision/analyze.js';
 import { reIdentifyBatch } from '../vision/reidentify.js';
+import { QuotaExhaustedError } from '../vision/client.js';
 import { randomPhrase } from '../assets/loadingPhrases.js';
 import { DEV_TEST_IMAGE } from '../assets/devTestImage.js';
 import { extractCaptureDate } from '../image/exif.js';
@@ -120,6 +121,13 @@ export function initReview() {
       const result = await analyzeFullPhoto(dataUrl, z.type, existing);
       handleAnalysisResult(dataUrl, result);
     } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        stopPhraseCycle();
+        close();
+        events.emit(EV.TOAST, { msg: 'Out of vision credits. Add your own API key in Settings.', kind: 'error' });
+        events.emit(EV.NAV_SETTINGS, { tab: 'api' });
+        return;
+      }
       console.error('Photo analysis failed:', err);
       showError(err.message || String(err));
     }
@@ -405,6 +413,12 @@ export function initReview() {
       showReIDReviewScreen();
     } catch (err) {
       stopPhraseCycle();
+      if (err instanceof QuotaExhaustedError) {
+        close();
+        events.emit(EV.TOAST, { msg: 'Out of vision credits. Add your own API key in Settings.', kind: 'error' });
+        events.emit(EV.NAV_SETTINGS, { tab: 'api' });
+        return;
+      }
       console.error('Re-ID failed:', err);
       showError('Re-ID failed: ' + (err.message || err));
     }

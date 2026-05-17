@@ -130,3 +130,21 @@ alter table public.global_action_log enable row level security;
 create policy "authed_insert" on public.global_action_log
   for insert with check (auth.uid() is not null);
 -- No SELECT policy: only service role can read global logs
+
+-- ── Vision API call ledger ───────────────────────────────────────────────────
+-- One row per Anthropic call we cover for the user (i.e. proxied through the
+-- vision-proxy edge function). BYOK calls bypass this table entirely.
+-- The vision-proxy function is the only writer; the client reads its own rows
+-- to render the quota meter in Settings.
+create table if not exists public.vision_api_calls (
+  id        bigserial primary key,
+  user_id   uuid not null references auth.users(id) on delete cascade,
+  called_at timestamptz not null default now()
+);
+create index if not exists vision_api_calls_user_called_idx
+  on public.vision_api_calls(user_id, called_at desc);
+alter table public.vision_api_calls enable row level security;
+create policy "owner_insert" on public.vision_api_calls
+  for insert with check (auth.uid() = user_id);
+create policy "owner_select" on public.vision_api_calls
+  for select using (auth.uid() = user_id);

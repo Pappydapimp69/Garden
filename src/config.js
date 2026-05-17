@@ -20,11 +20,21 @@ export const MAX_IMAGE_DIM = 1600;
 export const IMAGE_QUALITY = 0.82;
 export const REID_CROP_PCT = 25;
 
-// Vision model + endpoint. Swap here when migrating to a server-side proxy or a different model.
+// Vision model + endpoint. The direct endpoint is used only when the user has
+// supplied their own Anthropic key (BYOK); otherwise the app routes through
+// VISION_PROXY_URL which holds our key server-side and enforces the quota.
 export const VISION_MODEL    = 'claude-sonnet-4-20250514';
 export const VISION_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 export const VISION_MAX_TOKENS = 2000;
 
+// Per-user budget for proxied (covered) vision calls. The edge function is the
+// source of truth; these values exist client-side so the Settings meter shows
+// the right numerator/denominator and the BYOK CTA renders the same caps.
+export const VISION_DAILY_LIMIT    = 10;
+export const VISION_LIFETIME_LIMIT = 100;
+
 // Supabase project credentials (anon/public key — safe to ship in client code).
 export const SUPABASE_URL      = 'https://czoaeombqqhgyqbsetlj.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_LDKc3zPhBInG-DpInW0gLw_3GNt7MMP';
+
+export const VISION_PROXY_URL  = SUPABASE_URL + '/functions/v1/vision-proxy';

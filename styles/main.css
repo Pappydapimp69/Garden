@@ -303,3 +303,42 @@ input, select, textarea { font-family:inherit; }
 
 .account-btn { background:rgba(168,216,120,0.1); border:1px solid rgba(168,216,120,0.2); border-radius:6px; width:32px; height:32px; font-size:0.85rem; color:#7a9a6a; cursor:pointer; transition:background 0.15s,color 0.15s; flex-shrink:0; }
 .account-btn:hover { background:rgba(168,216,120,0.2); color:#a8d878; }
+
+/* ── Profile dropdown ─────────────────────────────────────────────── */
+.profile-menu { position:fixed; top:60px; right:14px; z-index:160; background:rgba(8,18,8,0.97); backdrop-filter:blur(12px); border:1px solid #3a6a2a; border-radius:8px; min-width:170px; padding:6px; box-shadow:0 8px 28px rgba(0,0,0,0.55); display:flex; flex-direction:column; gap:2px; opacity:0; transform:translateY(-4px); transition:opacity 0.12s, transform 0.12s; }
+.profile-menu.open { opacity:1; transform:translateY(0); }
+.profile-menu[hidden] { display:none; }
+.pm-item { background:transparent; border:none; color:#d4e8c2; text-align:left; padding:9px 12px; font-size:0.7rem; letter-spacing:0.04em; border-radius:5px; cursor:pointer; transition:background 0.12s, color 0.12s; }
+.pm-item:hover { background:rgba(168,216,120,0.12); color:#a8d878; }
+
+/* ── Settings screen ──────────────────────────────────────────────── */
+.settings-pane { padding:18px 18px 60px; overflow-y:auto; }
+.settings-section { background:rgba(8,18,8,0.6); border:1px solid rgba(58,106,42,0.4); border-radius:10px; padding:16px; margin-bottom:14px; }
+.settings-section.danger-zone { border-color:rgba(192,57,43,0.45); background:rgba(40,12,10,0.4); }
+.settings-label { font-size:0.55rem; color:#7aaa5a; letter-spacing:0.18em; text-transform:uppercase; margin-bottom:12px; padding-bottom:6px; border-bottom:1px solid rgba(58,106,42,0.3); }
+.settings-label.danger { color:#e87a7a; border-bottom-color:rgba(192,57,43,0.4); }
+.settings-pane label { font-size:0.6rem; color:#5a7a4a; letter-spacing:0.1em; text-transform:uppercase; display:block; margin-bottom:5px; margin-top:12px; }
+.settings-pane input[type="text"], .settings-pane input[type="password"] { width:100%; background:#0a120a; border:1px solid #3a6a2a; color:#d4e8c2; padding:9px 11px; border-radius:5px; font-size:0.72rem; outline:none; transition:border-color 0.15s; }
+.settings-pane input:focus { border-color:#a8d878; }
+.settings-hint { font-size:0.6rem; color:#7a8a6a; line-height:1.6; margin-top:8px; }
+.settings-row { display:flex; justify-content:space-between; align-items:baseline; gap:14px; padding:8px 0; }
+.settings-row-title { font-size:0.7rem; color:#d4e8c2; }
+.settings-row-sub   { font-size:0.6rem; color:#7a8a6a; font-family:'Space Mono',monospace; }
+
+/* Quota meter — reuses .xp-bar/.xp-fill from the level badge */
+.quota-row { display:flex; justify-content:space-between; align-items:baseline; }
+.quota-name { font-size:0.62rem; color:#a8c298; }
+.quota-num  { font-size:0.7rem; color:#a8d878; font-weight:700; font-family:'Space Mono',monospace; }
+.quota-bar { width:100%; height:5px; margin-top:6px; }
+
+.key-status { display:flex; align-items:center; justify-content:space-between; gap:14px; background:#0a140a; border:1px solid #2a4a1a; border-radius:6px; padding:10px 12px; margin-top:8px; }
+.key-status-text { flex:1; min-width:0; }
+
+/* Toggle switch */
+.toggle { display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:2px; padding:0; text-transform:none; letter-spacing:normal; }
+.toggle input { display:none; }
+.toggle-track { position:relative; width:36px; height:20px; background:#2a3a2a; border:1px solid #3a6a2a; border-radius:12px; transition:background 0.15s, border-color 0.15s; flex-shrink:0; }
+.toggle-thumb { position:absolute; top:2px; left:2px; width:14px; height:14px; background:#7a8a6a; border-radius:50%; transition:transform 0.18s, background 0.18s; }
+.toggle input:checked + .toggle-track { background:rgba(39,174,96,0.35); border-color:#27ae60; }
+.toggle input:checked + .toggle-track .toggle-thumb { transform:translateX(16px); background:#a8d878; }
+.toggle-label { font-size:0.62rem; color:#a8c298; line-height:1.5; }

@@ -46,4 +46,6 @@ export const EV = {
   TOAST: 'toast',                     // payload: { msg, kind? }
   NAV_OVERVIEW: 'nav:overview',
   NAV_ZONE: 'nav:zone',               // payload: { zoneId }
+  NAV_SETTINGS: 'nav:settings',       // payload: { tab? }
+  VISION_CALLED: 'vision:called',     // emitted after a proxied call so the quota meter invalidates
 };
