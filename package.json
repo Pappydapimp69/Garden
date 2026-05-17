@@ -1,0 +1,6 @@
+{
+  "type": "module",
+  "devDependencies": {
+    "terser": "^5.36.0"
+  }
+}

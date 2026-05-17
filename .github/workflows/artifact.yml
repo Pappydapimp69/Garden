@@ -18,6 +18,8 @@ jobs:
       - name: Read version
         id: version
         run: echo "version=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+      - name: Install dependencies
+        run: npm install
       - name: Build artifact
         run: node build.mjs --artifact
       - name: Create versioned copy
