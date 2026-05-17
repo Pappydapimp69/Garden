@@ -4,16 +4,11 @@
 // or by hosting from anywhere static.
 //
 // Usage:  node build.mjs [--artifact]
-//   --artifact: Strip embedded dev image, optimize for Claude.ai artifact paste.
-//               Output: dist/garden-artifact.html (~111 KB instead of ~648 KB).
+//   --artifact: Strip embedded dev image, minify JS+CSS for Claude.ai artifact paste.
+//               Output: dist/garden-artifact.html
 //
-// Design note: this is a deliberately small bundler tailored to *this*
-// codebase. It assumes:
-//   - all imports are static (no dynamic import())
-//   - all imports are named (no default imports, no namespace imports)
-//   - all exports are named (no default exports, no re-exports)
-//   - no top-level await
-// Don't extend it without revisiting these assumptions.
+// Minification: uses terser if installed (npm install). Falls back gracefully
+// to unminified output if terser is not available.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname, relative } from 'node:path';
@@ -27,27 +22,24 @@ const CSS_IN   = 'styles/main.css';
 const OUT_DIR  = 'dist';
 const OUT_FILE = ARTIFACT_MODE ? 'garden-artifact.html' : 'garden.html';
 
-const IMPORT_RE     = /^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]\s*;?\s*$/gm;
+const IMPORT_RE      = /^import\s*\{([^}]+)\}\s*from\s*['"]([^'"]+)['"]\s*;?\s*$/gm;
 const EXPORT_DECL_RE = /^export\s+(const|let|function|async\s+function)\s+([A-Za-z_$][\w$]*)/gm;
 
 const modules = new Map();
-const order = [];
+const order   = [];
 
 function loadModule(id) {
   if (modules.has(id)) return;
-  modules.set(id, null);   // placeholder to break any cycles
+  modules.set(id, null);
 
   const fullPath = resolve(ROOT, id);
   let src = readFileSync(fullPath, 'utf8');
 
-  // In artifact mode, stub out the dev test image to reduce bundle size.
   if (ARTIFACT_MODE && id === 'src/assets/devTestImage.js') {
     src = "export const DEV_TEST_IMAGE = '';";
   }
 
   const deps = [];
-
-  // Strip and capture imports.
   let body = src.replace(IMPORT_RE, (_m, names, importPath) => {
     const absId = relative(ROOT, resolve(dirname(fullPath), importPath));
     const parsed = names.split(',').map(s => s.trim()).filter(Boolean).map(s => {
@@ -58,7 +50,6 @@ function loadModule(id) {
     return '';
   });
 
-  // Capture export names; rewrite `export X` → `X`.
   const exports = [];
   body = body.replace(EXPORT_DECL_RE, (_m, kind, name) => {
     exports.push(name);
@@ -66,14 +57,13 @@ function loadModule(id) {
   });
 
   modules.set(id, { body, deps, exports });
-
   for (const d of deps) loadModule(d.id);
   if (!order.includes(id)) order.push(id);
 }
 
 loadModule(ENTRY);
 
-// ── Emit bundle ─────────────────────────────────────────────────────
+// ── Emit bundle ──────────────────────────────────────────────────────────────
 const blocks = order.map(id => {
   const { body, deps, exports } = modules.get(id);
   const importLines = deps.map(d => {
@@ -86,30 +76,49 @@ const blocks = order.map(id => {
     `  __mods[${JSON.stringify(id)}].${n} = ${n};`
   ).join('\n');
 
-  return `// ── ${id} ──
-{
-  __mods[${JSON.stringify(id)}] = {};
-${importLines}
-${body}
-${exportLines}
-}`;
+  return `// ── ${id} ──\n{\n  __mods[${JSON.stringify(id)}] = {};\n${importLines}\n${body}\n${exportLines}\n}`;
 }).join('\n\n');
 
-const bundle = `(() => {
-'use strict';
-const __mods = {};
-${blocks}
-})();
-`;
+let bundle = `(()=>{\n'use strict';\nconst __mods={};\n${blocks}\n})();\n`;
 
-// ── Inline into HTML ────────────────────────────────────────────────
+// ── Minify (artifact mode only, requires terser) ──────────────────────────────
+if (ARTIFACT_MODE) {
+  try {
+    const { minify } = await import('terser');
+    const result = await minify(bundle, {
+      compress: { passes: 2, drop_console: false },
+      mangle: true,
+      format: { comments: false },
+    });
+    if (result.code) {
+      const before = bundle.length;
+      bundle = result.code;
+      console.log(`Minified JS: ${(before/1024).toFixed(0)} KB → ${(bundle.length/1024).toFixed(0)} KB`);
+    }
+  } catch (e) {
+    console.log('terser not available, skipping JS minification (run npm install to enable)');
+  }
+}
+
+// ── Minify CSS ───────────────────────────────────────────────────────────────
+function minifyCSS(css) {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, '')           // remove comments
+    .replace(/\s+/g, ' ')                        // collapse whitespace
+    .replace(/\s*([{};:,>~+!])\s*/g, '$1')      // remove spaces around punctuation
+    .replace(/;}/g, '}')                         // remove trailing semicolons
+    .trim();
+}
+
+// ── Inline into HTML ─────────────────────────────────────────────────────────
 const html = readFileSync(resolve(ROOT, HTML_IN), 'utf8');
 const css  = readFileSync(resolve(ROOT, CSS_IN),  'utf8');
+const finalCSS = ARTIFACT_MODE ? minifyCSS(css) : css;
 
 const inlined = html
   .replace(
     /<link\s+rel="stylesheet"\s+href="\.\/styles\/main\.css"\s*>/,
-    `<style>\n${css}\n</style>`,
+    `<style>${finalCSS}</style>`,
   )
   .replace(
     /<script\s+type="module"\s+src="\.\/src\/main\.js"\s*><\/script>/,
