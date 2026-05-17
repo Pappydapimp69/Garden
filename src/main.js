@@ -15,6 +15,9 @@ import { initReview } from './ui/review.js';
 import { initAuth, logout } from './auth/authManager.js';
 import { initAuthUI } from './auth/authUI.js';
 import { logAction } from './data/actionsLog.js';
+import { initProfileMenu } from './ui/profileMenu.js';
+import { initSettings } from './ui/settings.js';
+import { lockSession } from './auth/apiKey.js';
 
 // Toast must be active before anything can emit EV.TOAST (including auth errors).
 initToast();
@@ -120,16 +123,18 @@ initToast();
       if (uploadBtnIsLongPress) { e.preventDefault(); uploadBtnIsLongPress = false; }
     });
 
-    // Account / logout button
+    // Settings screen + profile dropdown.
+    const settings = initSettings();
+    const profileMenu = initProfileMenu({
+      onSettings: () => events.emit(EV.NAV_SETTINGS, { tab: 'api' }),
+      onSignout:  async () => { lockSession(); await logout(); window.location.reload(); },
+    });
+
     const accountBtn = $('accountBtn');
     if (accountBtn) {
-      accountBtn.addEventListener('click', async () => {
-        const email = session.currentUser ? session.currentUser.email : 'signed in';
-        const confirmed = confirm(`Signed in as ${email}\n\nSign out?`);
-        if (confirmed) {
-          await logout();
-          window.location.reload();
-        }
+      accountBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileMenu.toggle(accountBtn);
       });
     }
 
@@ -141,6 +146,7 @@ initToast();
       overview.renderLevel();
     });
     events.on(EV.NAV_ZONE, ({ zoneId }) => zoneScreen.show(zoneId));
+    events.on(EV.NAV_SETTINGS, ({ tab } = {}) => settings.show(tab));
     events.on('zone:edit', ({ zoneId }) => zoneDlg.open(zoneId));
     events.on('care:close', () => carePanel.close());
 

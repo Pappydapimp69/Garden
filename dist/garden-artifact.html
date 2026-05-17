@@ -4,314 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Garden Journal</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Space+Mono:wght@400;700&display=swap');
-
-* { margin:0; padding:0; box-sizing:border-box; }
-html, body { width:100%; height:100%; overflow:hidden; -webkit-tap-highlight-color:transparent; }
-body { background:#0a120a; color:#d4e8c2; font-family:'Space Mono',monospace; user-select:none; -webkit-user-select:none; }
-button { font-family:inherit; cursor:pointer; }
-input, select, textarea { font-family:inherit; }
-
-/* ── Screens ───────────────────────────────────────────────────────── */
-.screen { position:fixed; inset:0; display:none; flex-direction:column; }
-.screen.active { display:flex; }
-
-/* ── Garden overview screen ───────────────────────────────────────── */
-.header { padding:18px 20px 12px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; justify-content:space-between; align-items:flex-end; }
-.header-title { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.4rem; line-height:1.1; }
-.header-sub { font-size:0.55rem; color:#5a7a4a; letter-spacing:0.18em; text-transform:uppercase; margin-top:4px; }
-.level-badge { background:rgba(168,216,120,0.1); border:1px solid rgba(168,216,120,0.3); border-radius:6px; padding:6px 10px; text-align:right; }
-.level-badge .level-label { font-size:0.5rem; color:#5a7a4a; letter-spacing:0.15em; text-transform:uppercase; }
-.level-badge .level-value { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.05rem; line-height:1; margin-top:2px; }
-.xp-bar { width:60px; height:3px; background:rgba(58,106,42,0.3); border-radius:2px; margin-top:5px; overflow:hidden; }
-.xp-fill { height:100%; background:#a8d878; transition:width 0.3s; }
-
-.zone-list { flex:1; overflow-y:auto; padding:14px 16px 80px; }
-.zone-empty { text-align:center; padding:60px 20px; color:#5a7a4a; }
-.zone-empty h2 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.1rem; margin-bottom:8px; }
-.zone-empty p { font-size:0.7rem; line-height:1.6; max-width:280px; margin:0 auto; }
-
-.zone-card { background:rgba(8,18,8,0.6); border:1px solid rgba(58,106,42,0.4); border-radius:10px; padding:14px; margin-bottom:12px; cursor:pointer; transition:border-color 0.15s, transform 0.15s; }
-.zone-card:active { transform:scale(0.98); }
-.zone-card:hover { border-color:rgba(168,216,120,0.5); }
-.zone-card-header { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
-.zone-card-name { font-family:'Playfair Display',serif; color:#a8d878; font-size:1rem; line-height:1.2; }
-.zone-card-type { font-size:0.5rem; color:#7aaa5a; letter-spacing:0.15em; text-transform:uppercase; padding:2px 7px; background:rgba(122,170,90,0.15); border-radius:10px; flex-shrink:0; }
-.zone-card-stats { display:flex; gap:12px; font-size:0.6rem; color:#7a8a6a; margin-top:8px; }
-.zone-card-stats span strong { color:#a8c298; }
-.zone-thumb { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-top:8px; background:#000; }
-
-.fab { position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:#27ae60; color:#fff; border:none; font-size:1.6rem; box-shadow:0 6px 20px rgba(39,174,96,0.4); z-index:100; transition:transform 0.15s; touch-action:manipulation; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-.fab:active { transform:scale(0.92); }
-
-/* Hidden file inputs are off-screen, not display:none, so sandboxed iframes
-   still let an associated <label for="..."> open the native picker. */
-.hidden-file { position:fixed; left:-9999px; width:1px; height:1px; opacity:0; pointer-events:none; }
-
-/* ── Zone detail screen ───────────────────────────────────────────── */
-.detail-header { padding:14px 16px 12px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; align-items:center; gap:10px; }
-.back-btn { background:transparent; border:none; color:#a8d878; font-size:1.1rem; padding:6px 8px; }
-.detail-title { flex:1; }
-.detail-title h2 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.05rem; line-height:1.1; }
-.detail-title .sub { font-size:0.5rem; color:#5a7a4a; letter-spacing:0.15em; text-transform:uppercase; margin-top:2px; }
-.detail-menu-btn { background:transparent; border:1px solid rgba(58,106,42,0.4); color:#a8d878; border-radius:6px; padding:5px 9px; font-size:0.6rem; }
-
-.tabs { display:flex; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; }
-.tab { flex:1; padding:10px; background:transparent; border:none; color:#5a7a4a; font-size:0.6rem; letter-spacing:0.15em; text-transform:uppercase; border-bottom:2px solid transparent; }
-.tab.active { color:#a8d878; border-bottom-color:#a8d878; }
-
-.tab-content { flex:1; overflow-y:auto; }
-.tab-content.map { overflow:hidden; position:relative; }
-
-/* ── Map view (within zone) ───────────────────────────────────────── */
-.map { position:absolute; inset:0; overflow:hidden; touch-action:none; cursor:grab; background:#0a120a; }
-.map.panning { cursor:grabbing; }
-.map-stage { position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; }
-.map-stage img { display:block; width:100%; height:100%; pointer-events:none; user-select:none; -webkit-user-drag:none; }
-
-.map-empty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; }
-.map-empty h3 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.05rem; margin-bottom:8px; }
-.map-empty p { font-size:0.7rem; color:#7a8a6a; line-height:1.6; max-width:300px; margin-bottom:20px; }
-.upload-btn { background:#27ae60; color:#fff; border:none; padding:12px 24px; border-radius:6px; font-size:0.7rem; font-weight:700; letter-spacing:0.05em; cursor:pointer; display:inline-block; }
-
-.zoom-controls { position:absolute; top:14px; right:14px; z-index:50; display:flex; flex-direction:column; gap:1px; background:rgba(8,18,8,0.85); backdrop-filter:blur(10px); border:1px solid rgba(58,106,42,0.5); border-radius:8px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.5); }
-.zoom-btn { width:34px; height:34px; background:transparent; border:none; color:#a8d878; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:background 0.15s; border-bottom:1px solid rgba(58,106,42,0.3); }
-.zoom-btn:last-child { border-bottom:none; }
-.zoom-btn:hover { background:rgba(58,106,42,0.4); }
-.zoom-btn.reset { font-size:0.5rem; height:28px; letter-spacing:0.1em; }
-.zoom-label { font-size:0.5rem; color:#5a7a4a; text-align:center; padding:3px 0; border-bottom:1px solid rgba(58,106,42,0.3); }
-
-/* ── Markers ──────────────────────────────────────────────────────── */
-.marker { position:absolute; transform:translate(-50%,-50%); cursor:pointer; z-index:10; touch-action:none; }
-.marker.dragging { cursor:grabbing; z-index:55; }
-.marker.arming .marker-dot { box-shadow:0 0 0 3px rgba(241,196,15,0.55), 0 0 14px rgba(241,196,15,0.6); }
-.marker-dot { border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; border:2px solid rgba(255,255,255,0.7); box-shadow:0 0 8px rgba(0,0,0,0.8); transition:transform 0.15s, box-shadow 0.2s; }
-.marker:hover .marker-dot { transform:scale(1.25); }
-.marker.dragging .marker-dot { transform:scale(1.4); opacity:0.95; box-shadow:0 0 0 4px rgba(241,196,15,0.8), 0 0 24px rgba(241,196,15,0.9); animation:dragPulse 0.8s ease-in-out infinite; }
-@keyframes dragPulse { 0%,100% { box-shadow:0 0 0 4px rgba(241,196,15,0.8), 0 0 24px rgba(241,196,15,0.9); } 50% { box-shadow:0 0 0 6px rgba(241,196,15,1.0), 0 0 32px rgba(241,196,15,1.0); } }
-.fruiting .marker-dot  { background:#c0392b; color:#fff; }
-.herb .marker-dot      { background:#27ae60; color:#fff; }
-.flowering .marker-dot { background:#e67e22; color:#fff; }
-.unknown .marker-dot   { background:#8e44ad; color:#fff; }
-
-.tooltip { position:absolute; bottom:calc(100% + 6px); left:50%; background:rgba(8,18,8,0.95); border:1px solid #3a6a2a; color:#d4e8c2; padding:5px 9px; border-radius:3px; font-size:0.58rem; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity 0.15s; text-align:center; line-height:1.6; }
-.tooltip strong { display:block; color:#a8d878; font-size:0.62rem; }
-.marker:hover .tooltip { opacity:1; }
-.marker.dragging .tooltip { opacity:1 !important; }
-
-/* ── Press rings ──────────────────────────────────────────────────── */
-.press-ring, .tag-ring { position:fixed; pointer-events:none; z-index:80; transform:translate(-50%,-50%); display:none; }
-.press-ring { width:50px; height:50px; }
-.press-ring svg, .tag-ring svg { transform:rotate(-90deg); }
-.press-ring circle, .tag-ring circle { fill:none; stroke-width:3; stroke-linecap:round; }
-.press-ring .bg { stroke:rgba(168,216,120,0.2); }
-.press-ring .fg { stroke:#a8d878; stroke-dasharray:138; stroke-dashoffset:138; transition:stroke-dashoffset linear; }
-.press-ring.active, .tag-ring.active { display:block; }
-.tag-ring circle { stroke-width:4; }
-.tag-ring .bg { stroke:rgba(255,255,255,0.2); }
-.tag-ring .fg { stroke:#f1c40f; stroke-dasharray:339; stroke-dashoffset:339; transition:stroke-dashoffset linear; }
-
-/* ── Journal & plants list ────────────────────────────────────────── */
-.list-content { padding:16px; }
-.list-empty { text-align:center; padding:60px 20px; color:#7a8a6a; font-size:0.7rem; line-height:1.6; }
-.list-item { background:rgba(8,18,8,0.6); border:1px solid rgba(58,106,42,0.4); border-radius:8px; padding:12px 14px; margin-bottom:10px; cursor:pointer; transition:border-color 0.15s; }
-.list-item:hover { border-color:rgba(168,216,120,0.5); }
-.list-item-header { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-.list-item-name { color:#a8d878; font-size:0.78rem; font-weight:700; }
-.list-item-meta { font-size:0.55rem; color:#5a7a4a; letter-spacing:0.05em; }
-.list-item-sub { font-size:0.6rem; color:#7a8a6a; margin-top:4px; }
-
-/* ── Dialogs ──────────────────────────────────────────────────────── */
-.dialog-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.78); z-index:200; align-items:center; justify-content:center; padding:20px; }
-.dialog-overlay.active { display:flex; }
-.dialog { background:#111e11; border:1px solid #3a6a2a; border-radius:10px; padding:22px; min-width:300px; max-width:440px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 0 50px rgba(0,0,0,0.8); }
-.dialog h3 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.1rem; margin-bottom:6px; }
-.dialog .dlg-sub { font-size:0.55rem; color:#5a7a4a; letter-spacing:0.12em; text-transform:uppercase; margin-bottom:14px; }
-.dialog label { font-size:0.6rem; color:#5a7a4a; letter-spacing:0.1em; text-transform:uppercase; display:block; margin-bottom:5px; margin-top:12px; }
-.dialog input, .dialog select, .dialog textarea { width:100%; background:#0a120a; border:1px solid #3a6a2a; color:#d4e8c2; padding:8px 10px; border-radius:4px; font-size:0.7rem; outline:none; }
-.dialog textarea { min-height:60px; resize:vertical; }
-.dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color:#a8d878; }
-.dialog-buttons { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
-.btn { flex:1; min-width:80px; padding:9px; border:none; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:700; letter-spacing:0.05em; text-align:center; display:inline-block; }
-.btn-confirm { background:#27ae60; color:#fff; }
-.btn-cancel  { background:#2a3a2a; color:#7aaa5a; border:1px solid #3a6a2a; }
-.btn-delete  { background:#c0392b; color:#fff; }
-.btn-secondary { background:#1a2e3a; color:#78c8e8; border:1px solid #2a6a8a; }
-
-.id-status { font-size:0.62rem; color:#a8d878; margin-bottom:12px; padding:10px; background:#0a140a; border-left:2px solid #3a6a2a; border-radius:2px; line-height:1.6; }
-.id-status.error { color:#e88; border-left-color:#c0392b; }
-.id-status.warn  { color:#f1c40f; border-left-color:#f1c40f; }
-.spinner { display:inline-block; width:10px; height:10px; border:2px solid #3a6a2a; border-top-color:#a8d878; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:8px; }
-@keyframes spin { to { transform:rotate(360deg); } }
-
-.tag-suggestions { display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:300px; overflow-y:auto; }
-.tag-suggestion { background:#0a140a; border:1px solid #2a4a1a; border-radius:4px; padding:9px 11px; cursor:pointer; transition:all 0.15s; display:flex; justify-content:space-between; align-items:center; gap:10px; }
-.tag-suggestion:hover { border-color:#a8d878; background:#152515; }
-.tag-suggestion.rejected { opacity:0.45; }
-.tag-suggestion.rejected .ts-name { text-decoration:line-through; color:#6a7a6a; }
-.ts-info { flex:1; min-width:0; }
-.ts-name { font-size:0.7rem; color:#d4e8c2; font-weight:700; }
-.ts-cat { font-size:0.52rem; color:#5a7a4a; letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; }
-.ts-conf { font-size:0.55rem; font-weight:700; padding:3px 7px; border-radius:10px; flex-shrink:0; }
-.ts-conf.high { color:#a8d878; background:#1a2e1a; }
-.ts-conf.med  { color:#f39c12; background:#2a200a; }
-.ts-conf.low  { color:#e67e22; background:#2a1e0a; }
-.reject-btn { background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:3px 5px; font-size:0.75rem; line-height:1; flex-shrink:0; }
-.reject-btn:hover { background:rgba(192,57,43,0.2); }
-
-.crop-preview { width:100%; max-height:140px; object-fit:contain; border:1px solid #2a4a1a; border-radius:3px; background:#000; margin-bottom:10px; }
-
-/* ── Care panel (bottom sheet) ─────────────────────────────────────── */
-.care-panel { position:fixed; bottom:0; left:0; right:0; z-index:150; background:rgba(8,18,8,0.97); backdrop-filter:blur(16px); border-top:1px solid rgba(58,106,42,0.6); border-radius:16px 16px 0 0; box-shadow:0 -8px 40px rgba(0,0,0,0.7); transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.32,0.72,0,1); max-height:72vh; display:flex; flex-direction:column; }
-.care-panel.open { transform:translateY(0); }
-.care-handle { width:36px; height:4px; background:rgba(168,216,120,0.3); border-radius:2px; margin:12px auto 0; flex-shrink:0; }
-.care-header { display:flex; align-items:flex-start; justify-content:space-between; padding:12px 18px 10px; border-bottom:1px solid rgba(58,106,42,0.3); }
-.care-title { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.05rem; }
-.care-sub { font-size:0.52rem; color:#5a7a4a; letter-spacing:0.12em; text-transform:uppercase; margin-top:3px; }
-.care-close { background:transparent; border:none; color:#5a7a4a; font-size:1.2rem; padding:0; line-height:1; flex-shrink:0; margin-left:10px; }
-.care-body { overflow-y:auto; padding:14px 18px 24px; flex:1; }
-.care-section { margin-bottom:14px; }
-.care-section-title { font-size:0.52rem; color:#5a7a4a; letter-spacing:0.18em; text-transform:uppercase; border-bottom:1px solid rgba(58,106,42,0.3); padding-bottom:4px; margin-bottom:8px; }
-.care-section p, .care-section li { font-size:0.62rem; color:#b0c8a0; line-height:1.7; margin-bottom:4px; }
-.care-section ul { padding-left:14px; }
-.care-tag { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.52rem; font-weight:700; margin:2px 3px 2px 0; }
-.care-tag.sun     { background:#2a2000; color:#f1c40f; border:1px solid rgba(241,196,15,0.4); }
-.care-tag.water   { background:#001a2a; color:#78c8e8; border:1px solid rgba(120,200,232,0.4); }
-.care-tag.zone    { background:#0a1a0a; color:#a8d878; border:1px solid rgba(168,216,120,0.4); }
-
-/* ── Toast ────────────────────────────────────────────────────────── */
-.toast { position:fixed; top:50%; left:50%; transform:translate(-50%,calc(-50% + 30px)); background:rgba(8,18,8,0.96); backdrop-filter:blur(12px); border:1px solid rgba(168,216,120,0.4); border-radius:10px; padding:14px 18px; box-shadow:0 4px 30px rgba(0,0,0,0.6); z-index:300; max-width:calc(100vw - 40px); width:300px; opacity:0; pointer-events:none; transition:opacity 0.2s, transform 0.2s; font-size:0.62rem; line-height:1.6; color:#d4e8c2; text-align:center; }
-.toast.show { opacity:1; transform:translate(-50%,-50%); }
-.toast.xp { border-color:rgba(241,196,15,0.5); }
-.toast.xp .xp-label { color:#f1c40f; font-weight:700; font-size:0.7rem; }
-.toast.error { border-color:rgba(192,57,43,0.6); color:#f88; }
-
-/* ── Review screen (AI tag confirmation) ──────────────────────────── */
-.review-screen { position:fixed; inset:0; z-index:180; background:#0a120a; display:none; flex-direction:column; }
-.review-screen.active { display:flex; }
-.review-header { padding:12px 14px 10px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
-.review-header h2 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1rem; }
-.review-header .sub { font-size:0.5rem; color:#5a7a4a; letter-spacing:0.15em; text-transform:uppercase; margin-top:2px; }
-.review-conf { padding:4px 10px; border-radius:14px; font-size:0.55rem; font-weight:700; letter-spacing:0.05em; flex-shrink:0; }
-.review-conf.high { background:#1a2e1a; color:#a8d878; }
-.review-conf.med  { background:#2a200a; color:#f39c12; }
-.review-conf.low  { background:#2a1e0a; color:#e67e22; }
-
-.review-photo { position:relative; flex-shrink:0; height:42vh; min-height:200px; background:#000; overflow:hidden; }
-.review-photo img { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
-.review-marker { position:absolute; transform:translate(-50%,-50%); cursor:pointer; z-index:5; }
-.review-marker .dot { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.55rem; border:2px solid rgba(255,255,255,0.7); box-shadow:0 0 8px rgba(0,0,0,0.8); transition:transform 0.15s; }
-.review-marker:hover .dot, .review-marker.selected .dot { transform:scale(1.35); }
-.review-marker.selected .dot { box-shadow:0 0 0 3px #f1c40f, 0 0 18px rgba(241,196,15,0.7); }
-.review-marker.rejected .dot { opacity:0.35; background:#444 !important; }
-.review-marker.fruiting .dot  { background:#c0392b; }
-.review-marker.herb .dot      { background:#27ae60; }
-.review-marker.flowering .dot { background:#e67e22; }
-.review-marker.unknown .dot   { background:#8e44ad; }
-
-.review-status { padding:9px 14px; font-size:0.6rem; line-height:1.55; flex-shrink:0; border-bottom:1px solid rgba(58,106,42,0.3); }
-.review-status.high { color:#a8d878; background:rgba(168,216,120,0.05); }
-.review-status.med  { color:#f39c12; background:rgba(243,156,18,0.07); }
-.review-status.low  { color:#e67e22; background:rgba(230,126,34,0.07); }
-
-.review-date { padding:10px 14px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; flex-direction:column; gap:4px; }
-.review-date label { font-size:0.55rem; color:#5a7a4a; letter-spacing:0.05em; text-transform:uppercase; }
-.review-date input { background:#0a120a; border:1px solid rgba(168,216,120,0.3); color:#d4e8c2; padding:6px 8px; border-radius:3px; font-size:0.65rem; font-family:inherit; outline:none; }
-.review-date input:focus { border-color:#a8d878; }
-
-.review-list { flex:1; overflow-y:auto; padding:8px 12px 12px; }
-.review-list-empty { text-align:center; padding:30px 16px; color:#5a7a4a; font-size:0.65rem; line-height:1.6; }
-.review-item { background:rgba(8,18,8,0.6); border:1px solid rgba(58,106,42,0.4); border-radius:8px; padding:10px 12px; margin-bottom:8px; transition:border-color 0.15s; cursor:pointer; }
-.review-item.selected { border-color:#f1c40f; background:rgba(241,196,15,0.05); }
-.review-item.rejected { opacity:0.5; }
-.review-item.rejected .ri-name { text-decoration:line-through; }
-.review-item-head { display:flex; align-items:center; gap:10px; }
-.ri-num { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.55rem; flex-shrink:0; border:1px solid rgba(255,255,255,0.4); }
-.ri-num.fruiting  { background:#c0392b; }
-.ri-num.herb      { background:#27ae60; }
-.ri-num.flowering { background:#e67e22; }
-.ri-num.unknown   { background:#8e44ad; }
-.ri-info { flex:1; min-width:0; }
-.ri-name { font-size:0.7rem; color:#d4e8c2; font-weight:700; line-height:1.2; }
-.ri-meta { font-size:0.52rem; color:#7a8a6a; margin-top:2px; letter-spacing:0.03em; }
-.ri-conf-bar { width:60px; height:4px; background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden; margin-top:5px; }
-.ri-conf-fill { height:100%; transition:width 0.3s; }
-.ri-conf-fill.high { background:#a8d878; }
-.ri-conf-fill.med  { background:#f39c12; }
-.ri-conf-fill.low  { background:#e67e22; }
-.ri-actions { display:flex; gap:5px; flex-shrink:0; }
-.ri-act-btn { background:transparent; border:1px solid rgba(255,255,255,0.12); border-radius:5px; padding:5px 8px; font-size:0.65rem; color:#a8c298; line-height:1; min-width:30px; }
-.ri-act-btn:hover { border-color:rgba(168,216,120,0.4); background:rgba(168,216,120,0.05); }
-.ri-act-btn.danger:hover { border-color:rgba(192,57,43,0.5); background:rgba(192,57,43,0.1); color:#f88; }
-
-.review-footer { padding:10px 14px 14px; border-top:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; gap:8px; background:#0a140a; }
-.review-footer .btn { padding:11px; font-size:0.62rem; }
-
-.ri-name-edit { width:100%; background:#0a120a; border:1px solid #a8d878; color:#d4e8c2; padding:5px 7px; border-radius:3px; font-size:0.7rem; outline:none; font-family:inherit; }
-
-.review-processing { display:flex; align-items:center; justify-content:center; flex:1; flex-direction:column; gap:14px; padding:30px; text-align:center; }
-.review-processing-spinner { width:30px; height:30px; border:3px solid #3a6a2a; border-top-color:#a8d878; border-radius:50%; animation:spin 0.9s linear infinite; }
-.review-processing-text { font-size:0.7rem; color:#a8d878; line-height:1.5; }
-.review-processing-sub { font-size:0.55rem; color:#5a7a4a; letter-spacing:0.05em; }
-
-/* ── Re-ID screen (per-plant crop review) ─────────────────────────── */
-.reid-list { padding:14px; }
-.reid-card { background:rgba(8,18,8,0.7); border:1px solid rgba(58,106,42,0.4); border-radius:10px; padding:12px; margin-bottom:14px; }
-.reid-card-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-.reid-num { width:24px; height:24px; border-radius:50%; background:#444; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.55rem; flex-shrink:0; border:1px solid rgba(255,255,255,0.4); }
-.reid-card-title { flex:1; min-width:0; }
-.reid-card-title .was { font-size:0.5rem; color:#7a8a6a; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:2px; }
-.reid-card-title .was-name { font-size:0.7rem; color:#d4e8c2; text-decoration:line-through; opacity:0.7; }
-.reid-crop { width:100%; height:140px; background:#000; border-radius:6px; object-fit:contain; margin-bottom:10px; }
-.reid-suggestions { display:flex; flex-direction:column; gap:6px; }
-.reid-sugg { background:rgba(8,18,8,0.5); border:1px solid rgba(58,106,42,0.3); border-radius:6px; padding:8px 10px; display:flex; align-items:center; gap:10px; cursor:pointer; transition:all 0.15s; }
-.reid-sugg:hover { border-color:rgba(168,216,120,0.6); background:rgba(168,216,120,0.05); }
-.reid-sugg.selected { border-color:#a8d878; background:rgba(168,216,120,0.1); }
-.reid-sugg-name { flex:1; font-size:0.65rem; color:#d4e8c2; }
-.reid-sugg-conf { font-size:0.55rem; font-weight:700; padding:2px 6px; border-radius:8px; }
-.reid-sugg-conf.high { color:#a8d878; background:#1a2e1a; }
-.reid-sugg-conf.med  { color:#f39c12; background:#2a200a; }
-.reid-sugg-conf.low  { color:#e67e22; background:#2a1e0a; }
-.reid-skip { background:transparent; border:1px dashed rgba(122,170,90,0.4); border-radius:6px; padding:8px 10px; font-size:0.6rem; color:#7aaa5a; text-align:center; margin-top:4px; width:100%; }
-.reid-skip:hover { border-color:rgba(168,216,120,0.7); color:#a8d878; }
-.reid-skip.selected { border-style:solid; border-color:#7aaa5a; background:rgba(122,170,90,0.1); color:#a8d878; }
-
-.reid-custom { display:flex; gap:6px; align-items:center; margin-top:4px; padding:6px 8px; background:rgba(8,18,8,0.5); border:1px solid rgba(58,106,42,0.3); border-radius:6px; transition:border-color 0.15s; }
-.reid-custom.selected { border-color:#a8d878; background:rgba(168,216,120,0.08); }
-.reid-custom-icon { font-size:0.65rem; color:#7a8a6a; flex-shrink:0; }
-.reid-custom input { flex:1; background:transparent; border:none; color:#d4e8c2; padding:4px 0; font-size:0.65rem; outline:none; font-family:inherit; }
-.reid-custom input::placeholder { color:#5a7a4a; }
-
-.reid-defer { background:transparent; border:1px dashed rgba(120,200,232,0.4); border-radius:6px; padding:8px 10px; font-size:0.6rem; color:#78c8e8; text-align:center; margin-top:4px; width:100%; line-height:1.3; }
-.reid-defer:hover { border-color:rgba(120,200,232,0.7); color:#a8d4e8; }
-.reid-defer.selected { border-style:solid; border-color:#78c8e8; background:rgba(120,200,232,0.08); color:#a8d4e8; }
-.reid-defer-sub { display:block; font-size:0.5rem; color:#5a7a8a; margin-top:2px; letter-spacing:0.05em; }
-
-.marker.pending .marker-dot { background:#5a7a8a !important; border:2px dashed rgba(120,200,232,0.8); animation:pendingPulse 2s ease-in-out infinite; }
-@keyframes pendingPulse { 0%,100% { box-shadow:0 0 0 0 rgba(120,200,232,0.4); } 50% { box-shadow:0 0 0 6px rgba(120,200,232,0); } }
-.review-marker.pending .dot { background:#5a7a8a !important; border:2px dashed rgba(120,200,232,0.8); }
-.ri-num.pending { background:#5a7a8a; border:1px dashed rgba(120,200,232,0.6); }
-
-/* ── Auth overlay ─────────────────────────────────────────────────── */
-.auth-overlay { position:fixed; inset:0; z-index:9999; background:rgba(6,12,6,0.97); display:none; align-items:center; justify-content:center; }
-.auth-overlay.active { display:flex; }
-.auth-card { width:min(340px, 90vw); background:rgba(8,18,8,0.95); border:1px solid rgba(58,106,42,0.5); border-radius:14px; padding:36px 28px 28px; display:flex; flex-direction:column; gap:14px; }
-.auth-logo { font-size:2.2rem; text-align:center; }
-.auth-title { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.35rem; text-align:center; line-height:1.2; }
-.auth-sub { font-size:0.6rem; color:#5a7a4a; text-align:center; letter-spacing:0.12em; text-transform:uppercase; }
-.auth-error { font-size:0.62rem; color:#e87a7a; background:rgba(232,122,122,0.1); border:1px solid rgba(232,122,122,0.3); border-radius:6px; padding:8px 10px; line-height:1.5; }
-.auth-card input { background:rgba(0,0,0,0.4); border:1px solid rgba(58,106,42,0.4); border-radius:7px; color:#d4e8c2; padding:11px 12px; font-size:0.72rem; outline:none; transition:border-color 0.15s; }
-.auth-card input:focus { border-color:rgba(168,216,120,0.6); }
-.auth-card input::placeholder { color:#3a5a2a; }
-.auth-submit { width:100%; padding:12px; font-size:0.72rem; letter-spacing:0.08em; margin-top:4px; }
-.auth-toggle { background:none; border:none; color:#5a7a4a; font-size:0.6rem; text-align:center; cursor:pointer; padding:4px; letter-spacing:0.05em; transition:color 0.15s; }
-.auth-toggle:hover { color:#a8d878; }
-
-.account-btn { background:rgba(168,216,120,0.1); border:1px solid rgba(168,216,120,0.2); border-radius:6px; width:32px; height:32px; font-size:0.85rem; color:#7a9a6a; cursor:pointer; transition:background 0.15s,color 0.15s; flex-shrink:0; }
-.account-btn:hover { background:rgba(168,216,120,0.2); color:#a8d878; }
-
-</style>
+<style>@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Space+Mono:wght@400;700&display=swap');*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden;-webkit-tap-highlight-color:transparent}body{background:#0a120a;color:#d4e8c2;font-family:'Space Mono',monospace;user-select:none;-webkit-user-select:none}button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inherit}.screen{position:fixed;inset:0;display:none;flex-direction:column}.screen.active{display:flex}.header{padding:18px 20px 12px;border-bottom:1px solid rgba(58,106,42,0.3);flex-shrink:0;display:flex;justify-content:space-between;align-items:flex-end}.header-title{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.4rem;line-height:1.1}.header-sub{font-size:0.55rem;color:#5a7a4a;letter-spacing:0.18em;text-transform:uppercase;margin-top:4px}.level-badge{background:rgba(168,216,120,0.1);border:1px solid rgba(168,216,120,0.3);border-radius:6px;padding:6px 10px;text-align:right}.level-badge .level-label{font-size:0.5rem;color:#5a7a4a;letter-spacing:0.15em;text-transform:uppercase}.level-badge .level-value{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.05rem;line-height:1;margin-top:2px}.xp-bar{width:60px;height:3px;background:rgba(58,106,42,0.3);border-radius:2px;margin-top:5px;overflow:hidden}.xp-fill{height:100%;background:#a8d878;transition:width 0.3s}.zone-list{flex:1;overflow-y:auto;padding:14px 16px 80px}.zone-empty{text-align:center;padding:60px 20px;color:#5a7a4a}.zone-empty h2{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.1rem;margin-bottom:8px}.zone-empty p{font-size:0.7rem;line-height:1.6;max-width:280px;margin:0 auto}.zone-card{background:rgba(8,18,8,0.6);border:1px solid rgba(58,106,42,0.4);border-radius:10px;padding:14px;margin-bottom:12px;cursor:pointer;transition:border-color 0.15s,transform 0.15s}.zone-card:active{transform:scale(0.98)}.zone-card:hover{border-color:rgba(168,216,120,0.5)}.zone-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}.zone-card-name{font-family:'Playfair Display',serif;color:#a8d878;font-size:1rem;line-height:1.2}.zone-card-type{font-size:0.5rem;color:#7aaa5a;letter-spacing:0.15em;text-transform:uppercase;padding:2px 7px;background:rgba(122,170,90,0.15);border-radius:10px;flex-shrink:0}.zone-card-stats{display:flex;gap:12px;font-size:0.6rem;color:#7a8a6a;margin-top:8px}.zone-card-stats span strong{color:#a8c298}.zone-thumb{width:100%;height:140px;object-fit:cover;border-radius:6px;margin-top:8px;background:#000}.fab{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:#27ae60;color:#fff;border:none;font-size:1.6rem;box-shadow:0 6px 20px rgba(39,174,96,0.4);z-index:100;transition:transform 0.15s;touch-action:manipulation;cursor:pointer;display:flex;align-items:center;justify-content:center}.fab:active{transform:scale(0.92)}.hidden-file{position:fixed;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}.detail-header{padding:14px 16px 12px;border-bottom:1px solid rgba(58,106,42,0.3);flex-shrink:0;display:flex;align-items:center;gap:10px}.back-btn{background:transparent;border:none;color:#a8d878;font-size:1.1rem;padding:6px 8px}.detail-title{flex:1}.detail-title h2{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.05rem;line-height:1.1}.detail-title .sub{font-size:0.5rem;color:#5a7a4a;letter-spacing:0.15em;text-transform:uppercase;margin-top:2px}.detail-menu-btn{background:transparent;border:1px solid rgba(58,106,42,0.4);color:#a8d878;border-radius:6px;padding:5px 9px;font-size:0.6rem}.tabs{display:flex;border-bottom:1px solid rgba(58,106,42,0.3);flex-shrink:0}.tab{flex:1;padding:10px;background:transparent;border:none;color:#5a7a4a;font-size:0.6rem;letter-spacing:0.15em;text-transform:uppercase;border-bottom:2px solid transparent}.tab.active{color:#a8d878;border-bottom-color:#a8d878}.tab-content{flex:1;overflow-y:auto}.tab-content.map{overflow:hidden;position:relative}.map{position:absolute;inset:0;overflow:hidden;touch-action:none;cursor:grab;background:#0a120a}.map.panning{cursor:grabbing}.map-stage{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}.map-stage img{display:block;width:100%;height:100%;pointer-events:none;user-select:none;-webkit-user-drag:none}.map-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}.map-empty h3{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.05rem;margin-bottom:8px}.map-empty p{font-size:0.7rem;color:#7a8a6a;line-height:1.6;max-width:300px;margin-bottom:20px}.upload-btn{background:#27ae60;color:#fff;border:none;padding:12px 24px;border-radius:6px;font-size:0.7rem;font-weight:700;letter-spacing:0.05em;cursor:pointer;display:inline-block}.zoom-controls{position:absolute;top:14px;right:14px;z-index:50;display:flex;flex-direction:column;gap:1px;background:rgba(8,18,8,0.85);backdrop-filter:blur(10px);border:1px solid rgba(58,106,42,0.5);border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.5)}.zoom-btn{width:34px;height:34px;background:transparent;border:none;color:#a8d878;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:background 0.15s;border-bottom:1px solid rgba(58,106,42,0.3)}.zoom-btn:last-child{border-bottom:none}.zoom-btn:hover{background:rgba(58,106,42,0.4)}.zoom-btn.reset{font-size:0.5rem;height:28px;letter-spacing:0.1em}.zoom-label{font-size:0.5rem;color:#5a7a4a;text-align:center;padding:3px 0;border-bottom:1px solid rgba(58,106,42,0.3)}.marker{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:10;touch-action:none}.marker.dragging{cursor:grabbing;z-index:55}.marker.arming .marker-dot{box-shadow:0 0 0 3px rgba(241,196,15,0.55),0 0 14px rgba(241,196,15,0.6)}.marker-dot{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;border:2px solid rgba(255,255,255,0.7);box-shadow:0 0 8px rgba(0,0,0,0.8);transition:transform 0.15s,box-shadow 0.2s}.marker:hover .marker-dot{transform:scale(1.25)}.marker.dragging .marker-dot{transform:scale(1.4);opacity:0.95;box-shadow:0 0 0 4px rgba(241,196,15,0.8),0 0 24px rgba(241,196,15,0.9);animation:dragPulse 0.8s ease-in-out infinite}@keyframes dragPulse{0%,100%{box-shadow:0 0 0 4px rgba(241,196,15,0.8),0 0 24px rgba(241,196,15,0.9)}50%{box-shadow:0 0 0 6px rgba(241,196,15,1.0),0 0 32px rgba(241,196,15,1.0)}}.fruiting .marker-dot{background:#c0392b;color:#fff}.herb .marker-dot{background:#27ae60;color:#fff}.flowering .marker-dot{background:#e67e22;color:#fff}.unknown .marker-dot{background:#8e44ad;color:#fff}.tooltip{position:absolute;bottom:calc(100%+6px);left:50%;background:rgba(8,18,8,0.95);border:1px solid #3a6a2a;color:#d4e8c2;padding:5px 9px;border-radius:3px;font-size:0.58rem;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.15s;text-align:center;line-height:1.6}.tooltip strong{display:block;color:#a8d878;font-size:0.62rem}.marker:hover .tooltip{opacity:1}.marker.dragging .tooltip{opacity:1!important}.press-ring,.tag-ring{position:fixed;pointer-events:none;z-index:80;transform:translate(-50%,-50%);display:none}.press-ring{width:50px;height:50px}.press-ring svg,.tag-ring svg{transform:rotate(-90deg)}.press-ring circle,.tag-ring circle{fill:none;stroke-width:3;stroke-linecap:round}.press-ring .bg{stroke:rgba(168,216,120,0.2)}.press-ring .fg{stroke:#a8d878;stroke-dasharray:138;stroke-dashoffset:138;transition:stroke-dashoffset linear}.press-ring.active,.tag-ring.active{display:block}.tag-ring circle{stroke-width:4}.tag-ring .bg{stroke:rgba(255,255,255,0.2)}.tag-ring .fg{stroke:#f1c40f;stroke-dasharray:339;stroke-dashoffset:339;transition:stroke-dashoffset linear}.list-content{padding:16px}.list-empty{text-align:center;padding:60px 20px;color:#7a8a6a;font-size:0.7rem;line-height:1.6}.list-item{background:rgba(8,18,8,0.6);border:1px solid rgba(58,106,42,0.4);border-radius:8px;padding:12px 14px;margin-bottom:10px;cursor:pointer;transition:border-color 0.15s}.list-item:hover{border-color:rgba(168,216,120,0.5)}.list-item-header{display:flex;justify-content:space-between;align-items:center;gap:10px}.list-item-name{color:#a8d878;font-size:0.78rem;font-weight:700}.list-item-meta{font-size:0.55rem;color:#5a7a4a;letter-spacing:0.05em}.list-item-sub{font-size:0.6rem;color:#7a8a6a;margin-top:4px}.dialog-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:200;align-items:center;justify-content:center;padding:20px}.dialog-overlay.active{display:flex}.dialog{background:#111e11;border:1px solid #3a6a2a;border-radius:10px;padding:22px;min-width:300px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 0 50px rgba(0,0,0,0.8)}.dialog h3{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.1rem;margin-bottom:6px}.dialog .dlg-sub{font-size:0.55rem;color:#5a7a4a;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:14px}.dialog label{font-size:0.6rem;color:#5a7a4a;letter-spacing:0.1em;text-transform:uppercase;display:block;margin-bottom:5px;margin-top:12px}.dialog input,.dialog select,.dialog textarea{width:100%;background:#0a120a;border:1px solid #3a6a2a;color:#d4e8c2;padding:8px 10px;border-radius:4px;font-size:0.7rem;outline:none}.dialog textarea{min-height:60px;resize:vertical}.dialog input:focus,.dialog select:focus,.dialog textarea:focus{border-color:#a8d878}.dialog-buttons{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.btn{flex:1;min-width:80px;padding:9px;border:none;border-radius:4px;font-size:0.6rem;cursor:pointer;font-weight:700;letter-spacing:0.05em;text-align:center;display:inline-block}.btn-confirm{background:#27ae60;color:#fff}.btn-cancel{background:#2a3a2a;color:#7aaa5a;border:1px solid #3a6a2a}.btn-delete{background:#c0392b;color:#fff}.btn-secondary{background:#1a2e3a;color:#78c8e8;border:1px solid #2a6a8a}.id-status{font-size:0.62rem;color:#a8d878;margin-bottom:12px;padding:10px;background:#0a140a;border-left:2px solid #3a6a2a;border-radius:2px;line-height:1.6}.id-status.error{color:#e88;border-left-color:#c0392b}.id-status.warn{color:#f1c40f;border-left-color:#f1c40f}.spinner{display:inline-block;width:10px;height:10px;border:2px solid #3a6a2a;border-top-color:#a8d878;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px}@keyframes spin{to{transform:rotate(360deg)}}.tag-suggestions{display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:300px;overflow-y:auto}.tag-suggestion{background:#0a140a;border:1px solid #2a4a1a;border-radius:4px;padding:9px 11px;cursor:pointer;transition:all 0.15s;display:flex;justify-content:space-between;align-items:center;gap:10px}.tag-suggestion:hover{border-color:#a8d878;background:#152515}.tag-suggestion.rejected{opacity:0.45}.tag-suggestion.rejected .ts-name{text-decoration:line-through;color:#6a7a6a}.ts-info{flex:1;min-width:0}.ts-name{font-size:0.7rem;color:#d4e8c2;font-weight:700}.ts-cat{font-size:0.52rem;color:#5a7a4a;letter-spacing:0.1em;text-transform:uppercase;margin-top:2px}.ts-conf{font-size:0.55rem;font-weight:700;padding:3px 7px;border-radius:10px;flex-shrink:0}.ts-conf.high{color:#a8d878;background:#1a2e1a}.ts-conf.med{color:#f39c12;background:#2a200a}.ts-conf.low{color:#e67e22;background:#2a1e0a}.reject-btn{background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:3px 5px;font-size:0.75rem;line-height:1;flex-shrink:0}.reject-btn:hover{background:rgba(192,57,43,0.2)}.crop-preview{width:100%;max-height:140px;object-fit:contain;border:1px solid #2a4a1a;border-radius:3px;background:#000;margin-bottom:10px}.care-panel{position:fixed;bottom:0;left:0;right:0;z-index:150;background:rgba(8,18,8,0.97);backdrop-filter:blur(16px);border-top:1px solid rgba(58,106,42,0.6);border-radius:16px 16px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.7);transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.32,0.72,0,1);max-height:72vh;display:flex;flex-direction:column}.care-panel.open{transform:translateY(0)}.care-handle{width:36px;height:4px;background:rgba(168,216,120,0.3);border-radius:2px;margin:12px auto 0;flex-shrink:0}.care-header{display:flex;align-items:flex-start;justify-content:space-between;padding:12px 18px 10px;border-bottom:1px solid rgba(58,106,42,0.3)}.care-title{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.05rem}.care-sub{font-size:0.52rem;color:#5a7a4a;letter-spacing:0.12em;text-transform:uppercase;margin-top:3px}.care-close{background:transparent;border:none;color:#5a7a4a;font-size:1.2rem;padding:0;line-height:1;flex-shrink:0;margin-left:10px}.care-body{overflow-y:auto;padding:14px 18px 24px;flex:1}.care-section{margin-bottom:14px}.care-section-title{font-size:0.52rem;color:#5a7a4a;letter-spacing:0.18em;text-transform:uppercase;border-bottom:1px solid rgba(58,106,42,0.3);padding-bottom:4px;margin-bottom:8px}.care-section p,.care-section li{font-size:0.62rem;color:#b0c8a0;line-height:1.7;margin-bottom:4px}.care-section ul{padding-left:14px}.care-tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.52rem;font-weight:700;margin:2px 3px 2px 0}.care-tag.sun{background:#2a2000;color:#f1c40f;border:1px solid rgba(241,196,15,0.4)}.care-tag.water{background:#001a2a;color:#78c8e8;border:1px solid rgba(120,200,232,0.4)}.care-tag.zone{background:#0a1a0a;color:#a8d878;border:1px solid rgba(168,216,120,0.4)}.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,calc(-50%+30px));background:rgba(8,18,8,0.96);backdrop-filter:blur(12px);border:1px solid rgba(168,216,120,0.4);border-radius:10px;padding:14px 18px;box-shadow:0 4px 30px rgba(0,0,0,0.6);z-index:300;max-width:calc(100vw - 40px);width:300px;opacity:0;pointer-events:none;transition:opacity 0.2s,transform 0.2s;font-size:0.62rem;line-height:1.6;color:#d4e8c2;text-align:center}.toast.show{opacity:1;transform:translate(-50%,-50%)}.toast.xp{border-color:rgba(241,196,15,0.5)}.toast.xp .xp-label{color:#f1c40f;font-weight:700;font-size:0.7rem}.toast.error{border-color:rgba(192,57,43,0.6);color:#f88}.review-screen{position:fixed;inset:0;z-index:180;background:#0a120a;display:none;flex-direction:column}.review-screen.active{display:flex}.review-header{padding:12px 14px 10px;border-bottom:1px solid rgba(58,106,42,0.3);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:10px}.review-header h2{font-family:'Playfair Display',serif;color:#a8d878;font-size:1rem}.review-header .sub{font-size:0.5rem;color:#5a7a4a;letter-spacing:0.15em;text-transform:uppercase;margin-top:2px}.review-conf{padding:4px 10px;border-radius:14px;font-size:0.55rem;font-weight:700;letter-spacing:0.05em;flex-shrink:0}.review-conf.high{background:#1a2e1a;color:#a8d878}.review-conf.med{background:#2a200a;color:#f39c12}.review-conf.low{background:#2a1e0a;color:#e67e22}.review-photo{position:relative;flex-shrink:0;height:42vh;min-height:200px;background:#000;overflow:hidden}.review-photo img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}.review-marker{position:absolute;transform:translate(-50%,-50%);cursor:pointer;z-index:5}.review-marker .dot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.55rem;border:2px solid rgba(255,255,255,0.7);box-shadow:0 0 8px rgba(0,0,0,0.8);transition:transform 0.15s}.review-marker:hover .dot,.review-marker.selected .dot{transform:scale(1.35)}.review-marker.selected .dot{box-shadow:0 0 0 3px #f1c40f,0 0 18px rgba(241,196,15,0.7)}.review-marker.rejected .dot{opacity:0.35;background:#444!important}.review-marker.fruiting .dot{background:#c0392b}.review-marker.herb .dot{background:#27ae60}.review-marker.flowering .dot{background:#e67e22}.review-marker.unknown .dot{background:#8e44ad}.review-status{padding:9px 14px;font-size:0.6rem;line-height:1.55;flex-shrink:0;border-bottom:1px solid rgba(58,106,42,0.3)}.review-status.high{color:#a8d878;background:rgba(168,216,120,0.05)}.review-status.med{color:#f39c12;background:rgba(243,156,18,0.07)}.review-status.low{color:#e67e22;background:rgba(230,126,34,0.07)}.review-date{padding:10px 14px;border-bottom:1px solid rgba(58,106,42,0.3);flex-shrink:0;display:flex;flex-direction:column;gap:4px}.review-date label{font-size:0.55rem;color:#5a7a4a;letter-spacing:0.05em;text-transform:uppercase}.review-date input{background:#0a120a;border:1px solid rgba(168,216,120,0.3);color:#d4e8c2;padding:6px 8px;border-radius:3px;font-size:0.65rem;font-family:inherit;outline:none}.review-date input:focus{border-color:#a8d878}.review-list{flex:1;overflow-y:auto;padding:8px 12px 12px}.review-list-empty{text-align:center;padding:30px 16px;color:#5a7a4a;font-size:0.65rem;line-height:1.6}.review-item{background:rgba(8,18,8,0.6);border:1px solid rgba(58,106,42,0.4);border-radius:8px;padding:10px 12px;margin-bottom:8px;transition:border-color 0.15s;cursor:pointer}.review-item.selected{border-color:#f1c40f;background:rgba(241,196,15,0.05)}.review-item.rejected{opacity:0.5}.review-item.rejected .ri-name{text-decoration:line-through}.review-item-head{display:flex;align-items:center;gap:10px}.ri-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.55rem;flex-shrink:0;border:1px solid rgba(255,255,255,0.4)}.ri-num.fruiting{background:#c0392b}.ri-num.herb{background:#27ae60}.ri-num.flowering{background:#e67e22}.ri-num.unknown{background:#8e44ad}.ri-info{flex:1;min-width:0}.ri-name{font-size:0.7rem;color:#d4e8c2;font-weight:700;line-height:1.2}.ri-meta{font-size:0.52rem;color:#7a8a6a;margin-top:2px;letter-spacing:0.03em}.ri-conf-bar{width:60px;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;margin-top:5px}.ri-conf-fill{height:100%;transition:width 0.3s}.ri-conf-fill.high{background:#a8d878}.ri-conf-fill.med{background:#f39c12}.ri-conf-fill.low{background:#e67e22}.ri-actions{display:flex;gap:5px;flex-shrink:0}.ri-act-btn{background:transparent;border:1px solid rgba(255,255,255,0.12);border-radius:5px;padding:5px 8px;font-size:0.65rem;color:#a8c298;line-height:1;min-width:30px}.ri-act-btn:hover{border-color:rgba(168,216,120,0.4);background:rgba(168,216,120,0.05)}.ri-act-btn.danger:hover{border-color:rgba(192,57,43,0.5);background:rgba(192,57,43,0.1);color:#f88}.review-footer{padding:10px 14px 14px;border-top:1px solid rgba(58,106,42,0.3);flex-shrink:0;display:flex;gap:8px;background:#0a140a}.review-footer .btn{padding:11px;font-size:0.62rem}.ri-name-edit{width:100%;background:#0a120a;border:1px solid #a8d878;color:#d4e8c2;padding:5px 7px;border-radius:3px;font-size:0.7rem;outline:none;font-family:inherit}.review-processing{display:flex;align-items:center;justify-content:center;flex:1;flex-direction:column;gap:14px;padding:30px;text-align:center}.review-processing-spinner{width:30px;height:30px;border:3px solid #3a6a2a;border-top-color:#a8d878;border-radius:50%;animation:spin 0.9s linear infinite}.review-processing-text{font-size:0.7rem;color:#a8d878;line-height:1.5}.review-processing-sub{font-size:0.55rem;color:#5a7a4a;letter-spacing:0.05em}.reid-list{padding:14px}.reid-card{background:rgba(8,18,8,0.7);border:1px solid rgba(58,106,42,0.4);border-radius:10px;padding:12px;margin-bottom:14px}.reid-card-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}.reid-num{width:24px;height:24px;border-radius:50%;background:#444;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.55rem;flex-shrink:0;border:1px solid rgba(255,255,255,0.4)}.reid-card-title{flex:1;min-width:0}.reid-card-title .was{font-size:0.5rem;color:#7a8a6a;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:2px}.reid-card-title .was-name{font-size:0.7rem;color:#d4e8c2;text-decoration:line-through;opacity:0.7}.reid-crop{width:100%;height:140px;background:#000;border-radius:6px;object-fit:contain;margin-bottom:10px}.reid-suggestions{display:flex;flex-direction:column;gap:6px}.reid-sugg{background:rgba(8,18,8,0.5);border:1px solid rgba(58,106,42,0.3);border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all 0.15s}.reid-sugg:hover{border-color:rgba(168,216,120,0.6);background:rgba(168,216,120,0.05)}.reid-sugg.selected{border-color:#a8d878;background:rgba(168,216,120,0.1)}.reid-sugg-name{flex:1;font-size:0.65rem;color:#d4e8c2}.reid-sugg-conf{font-size:0.55rem;font-weight:700;padding:2px 6px;border-radius:8px}.reid-sugg-conf.high{color:#a8d878;background:#1a2e1a}.reid-sugg-conf.med{color:#f39c12;background:#2a200a}.reid-sugg-conf.low{color:#e67e22;background:#2a1e0a}.reid-skip{background:transparent;border:1px dashed rgba(122,170,90,0.4);border-radius:6px;padding:8px 10px;font-size:0.6rem;color:#7aaa5a;text-align:center;margin-top:4px;width:100%}.reid-skip:hover{border-color:rgba(168,216,120,0.7);color:#a8d878}.reid-skip.selected{border-style:solid;border-color:#7aaa5a;background:rgba(122,170,90,0.1);color:#a8d878}.reid-custom{display:flex;gap:6px;align-items:center;margin-top:4px;padding:6px 8px;background:rgba(8,18,8,0.5);border:1px solid rgba(58,106,42,0.3);border-radius:6px;transition:border-color 0.15s}.reid-custom.selected{border-color:#a8d878;background:rgba(168,216,120,0.08)}.reid-custom-icon{font-size:0.65rem;color:#7a8a6a;flex-shrink:0}.reid-custom input{flex:1;background:transparent;border:none;color:#d4e8c2;padding:4px 0;font-size:0.65rem;outline:none;font-family:inherit}.reid-custom input::placeholder{color:#5a7a4a}.reid-defer{background:transparent;border:1px dashed rgba(120,200,232,0.4);border-radius:6px;padding:8px 10px;font-size:0.6rem;color:#78c8e8;text-align:center;margin-top:4px;width:100%;line-height:1.3}.reid-defer:hover{border-color:rgba(120,200,232,0.7);color:#a8d4e8}.reid-defer.selected{border-style:solid;border-color:#78c8e8;background:rgba(120,200,232,0.08);color:#a8d4e8}.reid-defer-sub{display:block;font-size:0.5rem;color:#5a7a8a;margin-top:2px;letter-spacing:0.05em}.marker.pending .marker-dot{background:#5a7a8a!important;border:2px dashed rgba(120,200,232,0.8);animation:pendingPulse 2s ease-in-out infinite}@keyframes pendingPulse{0%,100%{box-shadow:0 0 0 0 rgba(120,200,232,0.4)}50%{box-shadow:0 0 0 6px rgba(120,200,232,0)}}.review-marker.pending .dot{background:#5a7a8a!important;border:2px dashed rgba(120,200,232,0.8)}.ri-num.pending{background:#5a7a8a;border:1px dashed rgba(120,200,232,0.6)}.auth-overlay{position:fixed;inset:0;z-index:9999;background:rgba(6,12,6,0.97);display:none;align-items:center;justify-content:center}.auth-overlay.active{display:flex}.auth-card{width:min(340px,90vw);background:rgba(8,18,8,0.95);border:1px solid rgba(58,106,42,0.5);border-radius:14px;padding:36px 28px 28px;display:flex;flex-direction:column;gap:14px}.auth-logo{font-size:2.2rem;text-align:center}.auth-title{font-family:'Playfair Display',serif;color:#a8d878;font-size:1.35rem;text-align:center;line-height:1.2}.auth-sub{font-size:0.6rem;color:#5a7a4a;text-align:center;letter-spacing:0.12em;text-transform:uppercase}.auth-error{font-size:0.62rem;color:#e87a7a;background:rgba(232,122,122,0.1);border:1px solid rgba(232,122,122,0.3);border-radius:6px;padding:8px 10px;line-height:1.5}.auth-card input{background:rgba(0,0,0,0.4);border:1px solid rgba(58,106,42,0.4);border-radius:7px;color:#d4e8c2;padding:11px 12px;font-size:0.72rem;outline:none;transition:border-color 0.15s}.auth-card input:focus{border-color:rgba(168,216,120,0.6)}.auth-card input::placeholder{color:#3a5a2a}.auth-submit{width:100%;padding:12px;font-size:0.72rem;letter-spacing:0.08em;margin-top:4px}.auth-toggle{background:none;border:none;color:#5a7a4a;font-size:0.6rem;text-align:center;cursor:pointer;padding:4px;letter-spacing:0.05em;transition:color 0.15s}.auth-toggle:hover{color:#a8d878}.account-btn{background:rgba(168,216,120,0.1);border:1px solid rgba(168,216,120,0.2);border-radius:6px;width:32px;height:32px;font-size:0.85rem;color:#7a9a6a;cursor:pointer;transition:background 0.15s,color 0.15s;flex-shrink:0}.account-btn:hover{background:rgba(168,216,120,0.2);color:#a8d878}.profile-menu{position:fixed;top:60px;right:14px;z-index:160;background:rgba(8,18,8,0.97);backdrop-filter:blur(12px);border:1px solid #3a6a2a;border-radius:8px;min-width:170px;padding:6px;box-shadow:0 8px 28px rgba(0,0,0,0.55);display:flex;flex-direction:column;gap:2px;opacity:0;transform:translateY(-4px);transition:opacity 0.12s,transform 0.12s}.profile-menu.open{opacity:1;transform:translateY(0)}.profile-menu[hidden]{display:none}.pm-item{background:transparent;border:none;color:#d4e8c2;text-align:left;padding:9px 12px;font-size:0.7rem;letter-spacing:0.04em;border-radius:5px;cursor:pointer;transition:background 0.12s,color 0.12s}.pm-item:hover{background:rgba(168,216,120,0.12);color:#a8d878}.settings-pane{padding:18px 18px 60px;overflow-y:auto}.settings-section{background:rgba(8,18,8,0.6);border:1px solid rgba(58,106,42,0.4);border-radius:10px;padding:16px;margin-bottom:14px}.settings-section.danger-zone{border-color:rgba(192,57,43,0.45);background:rgba(40,12,10,0.4)}.settings-label{font-size:0.55rem;color:#7aaa5a;letter-spacing:0.18em;text-transform:uppercase;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid rgba(58,106,42,0.3)}.settings-label.danger{color:#e87a7a;border-bottom-color:rgba(192,57,43,0.4)}.settings-pane label{font-size:0.6rem;color:#5a7a4a;letter-spacing:0.1em;text-transform:uppercase;display:block;margin-bottom:5px;margin-top:12px}.settings-pane input[type="text"],.settings-pane input[type="password"]{width:100%;background:#0a120a;border:1px solid #3a6a2a;color:#d4e8c2;padding:9px 11px;border-radius:5px;font-size:0.72rem;outline:none;transition:border-color 0.15s}.settings-pane input:focus{border-color:#a8d878}.settings-hint{font-size:0.6rem;color:#7a8a6a;line-height:1.6;margin-top:8px}.settings-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:8px 0}.settings-row-title{font-size:0.7rem;color:#d4e8c2}.settings-row-sub{font-size:0.6rem;color:#7a8a6a;font-family:'Space Mono',monospace}.quota-row{display:flex;justify-content:space-between;align-items:baseline}.quota-name{font-size:0.62rem;color:#a8c298}.quota-num{font-size:0.7rem;color:#a8d878;font-weight:700;font-family:'Space Mono',monospace}.quota-bar{width:100%;height:5px;margin-top:6px}.key-status{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#0a140a;border:1px solid #2a4a1a;border-radius:6px;padding:10px 12px;margin-top:8px}.key-status-text{flex:1;min-width:0}.toggle{display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:2px;padding:0;text-transform:none;letter-spacing:normal}.toggle input{display:none}.toggle-track{position:relative;width:36px;height:20px;background:#2a3a2a;border:1px solid #3a6a2a;border-radius:12px;transition:background 0.15s,border-color 0.15s;flex-shrink:0}.toggle-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#7a8a6a;border-radius:50%;transition:transform 0.18s,background 0.18s}.toggle input:checked+.toggle-track{background:rgba(39,174,96,0.35);border-color:#27ae60}.toggle input:checked+.toggle-track .toggle-thumb{transform:translateX(16px);background:#a8d878}.toggle-label{font-size:0.62rem;color:#a8c298;line-height:1.5}</style>
 </head>
 <body>
 
@@ -347,6 +40,12 @@ input, select, textarea { font-family:inherit; }
   </div>
   <div class="zone-list" id="zoneList"></div>
   <label class="fab" id="addZoneBtn" for="photoInputNewZone" title="Add zone">+</label>
+</div>
+
+<!-- ─── Profile dropdown ───────────────────────────────────────────── -->
+<div class="profile-menu" id="profileMenu" hidden>
+  <button class="pm-item" data-act="settings">⚙ Settings</button>
+  <button class="pm-item" data-act="signout">⎋ Sign out</button>
 </div>
 
 <!-- ─── Zone Detail Screen ─────────────────────────────────────────── -->
@@ -392,6 +91,25 @@ input, select, textarea { font-family:inherit; }
   <div class="tab-content" id="tabJournal" style="display:none">
     <div class="list-content" id="journalList"></div>
   </div>
+</div>
+
+<!-- ─── Settings Screen ────────────────────────────────────────────── -->
+<div class="screen" id="settingsScreen">
+  <div class="detail-header">
+    <button class="back-btn" id="settingsBack">←</button>
+    <div class="detail-title">
+      <h2>Settings</h2>
+      <div class="sub">Account & preferences</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-stab="api">API</button>
+    <button class="tab" data-stab="garden">Garden</button>
+    <button class="tab" data-stab="account">Account</button>
+  </div>
+  <div class="tab-content settings-pane active" id="settingsApi"></div>
+  <div class="tab-content settings-pane" id="settingsGarden" style="display:none"></div>
+  <div class="tab-content settings-pane" id="settingsAccount" style="display:none"></div>
 </div>
 
 <!-- ─── Press rings ────────────────────────────────────────────────── -->
@@ -474,6 +192,21 @@ input, select, textarea { font-family:inherit; }
   </div>
 </div>
 
+<!-- ─── API Password Prompt ────────────────────────────────────────── -->
+<div class="dialog-overlay" id="apiPasswordDialog">
+  <div class="dialog">
+    <h3 id="apiPwTitle">Unlock API Key</h3>
+    <p class="dlg-sub" id="apiPwSub">Enter the password you used when saving the key.</p>
+    <label>Password</label>
+    <input type="password" id="apiPwInput" autocomplete="current-password">
+    <div class="auth-error" id="apiPwError" style="display:none; margin-top:10px"></div>
+    <div class="dialog-buttons">
+      <button class="btn btn-cancel" id="apiPwCancel">Cancel</button>
+      <button class="btn btn-confirm" id="apiPwConfirm">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── Care Panel ─────────────────────────────────────────────────── -->
 <div class="care-panel" id="carePanel">
   <div class="care-handle"></div>
@@ -497,9 +230,9 @@ input, select, textarea { font-family:inherit; }
 <input type="file" id="photoInputNewZone" accept="image/*" class="hidden-file">
 
 <script>
-(() => {
+(()=>{
 'use strict';
-const __mods = {};
+const __mods={};
 // ── src/config.js ──
 {
   __mods["src/config.js"] = {};
@@ -526,14 +259,24 @@ const MAX_IMAGE_DIM = 1600;
 const IMAGE_QUALITY = 0.82;
 const REID_CROP_PCT = 25;
 
-// Vision model + endpoint. Swap here when migrating to a server-side proxy or a different model.
+// Vision model + endpoint. The direct endpoint is used only when the user has
+// supplied their own Anthropic key (BYOK); otherwise the app routes through
+// VISION_PROXY_URL which holds our key server-side and enforces the quota.
 const VISION_MODEL    = 'claude-sonnet-4-20250514';
 const VISION_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const VISION_MAX_TOKENS = 2000;
 
+// Per-user budget for proxied (covered) vision calls. The edge function is the
+// source of truth; these values exist client-side so the Settings meter shows
+// the right numerator/denominator and the BYOK CTA renders the same caps.
+const VISION_DAILY_LIMIT    = 10;
+const VISION_LIFETIME_LIMIT = 100;
+
 // Supabase project credentials (anon/public key — safe to ship in client code).
 const SUPABASE_URL      = 'https://czoaeombqqhgyqbsetlj.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_LDKc3zPhBInG-DpInW0gLw_3GNt7MMP';
+
+const VISION_PROXY_URL  = SUPABASE_URL + '/functions/v1/vision-proxy';
 
   __mods["src/config.js"].STORAGE_KEY_V1 = STORAGE_KEY_V1;
   __mods["src/config.js"].STORAGE_KEY = STORAGE_KEY;
@@ -553,8 +296,11 @@ const SUPABASE_ANON_KEY = 'sb_publishable_LDKc3zPhBInG-DpInW0gLw_3GNt7MMP';
   __mods["src/config.js"].VISION_MODEL = VISION_MODEL;
   __mods["src/config.js"].VISION_ENDPOINT = VISION_ENDPOINT;
   __mods["src/config.js"].VISION_MAX_TOKENS = VISION_MAX_TOKENS;
+  __mods["src/config.js"].VISION_DAILY_LIMIT = VISION_DAILY_LIMIT;
+  __mods["src/config.js"].VISION_LIFETIME_LIMIT = VISION_LIFETIME_LIMIT;
   __mods["src/config.js"].SUPABASE_URL = SUPABASE_URL;
   __mods["src/config.js"].SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
+  __mods["src/config.js"].VISION_PROXY_URL = VISION_PROXY_URL;
 }
 
 // ── src/data/schema.js ──
@@ -1287,6 +1033,8 @@ const EV = {
   TOAST: 'toast',                     // payload: { msg, kind? }
   NAV_OVERVIEW: 'nav:overview',
   NAV_ZONE: 'nav:zone',               // payload: { zoneId }
+  NAV_SETTINGS: 'nav:settings',       // payload: { tab? }
+  VISION_CALLED: 'vision:called',     // emitted after a proxied call so the quota meter invalidates
 };
 
   __mods["src/state/session.js"].session = session;
@@ -2486,46 +2234,364 @@ function cropFromImage(dataUrl, xPct, yPct) {
   __mods["src/image/process.js"].cropFromImage = cropFromImage;
 }
 
+// ── src/auth/apiKey.js ──
+{
+  __mods["src/auth/apiKey.js"] = {};
+  const { getSession } = __mods["src/auth/authManager.js"];
+  const { dbUpdate } = __mods["src/auth/supabaseClient.js"];
+// Per-user Anthropic API key vault.
+//
+// Storage layout (localStorage):
+//   garden_apikey_v1_<user_id> = base64( salt(16) | iv(12) | ciphertext )
+//
+// Encryption: PBKDF2-SHA-256(password, salt, 200_000 iters) → AES-GCM-256 key.
+// The plaintext key + the user-supplied password are cached in module memory
+// after the first successful decrypt so we don't re-prompt on every call.
+//
+// We also persist a non-secret hint (last 4 chars of the key) to
+// user_profiles.api_key_hint so the Settings UI can show "key set" status
+// across devices without unlocking anything.
+
+
+
+const ITERATIONS = 200_000;
+const STORAGE_PREFIX = 'garden_apikey_v1_';
+
+let _cachedKey      = null;   // decrypted plaintext, this page only
+let _cachedPassword = null;   // so re-encrypting after rotation doesn't re-prompt
+let _cachedForUser  = null;
+
+function storageKey(uid) { return STORAGE_PREFIX + uid; }
+
+function bytesToB64(bytes) {
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s);
+}
+function b64ToBytes(b64) {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+async function deriveKey(password, salt) {
+  const baseKey = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password),
+    { name: 'PBKDF2' }, false, ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+function hintFor(key) {
+  const k = String(key || '');
+  if (k.length < 4) return null;
+  return k.slice(0, 3) + '…' + k.slice(-4);
+}
+
+function currentUid() {
+  const s = getSession();
+  return s ? s.user_id : null;
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────
+
+function hasApiKey() {
+  const uid = currentUid();
+  if (!uid) return false;
+  try { return !!localStorage.getItem(storageKey(uid)); } catch { return false; }
+}
+
+function getApiKeyHint() {
+  const uid = currentUid();
+  if (!uid) return null;
+  // Read whatever the seed/refresh wrote into user_profiles.api_key_hint.
+  try {
+    const raw = localStorage.getItem(storageKey(uid) + '_hint');
+    return raw || null;
+  } catch { return null; }
+}
+
+async function setApiKey(apiKey, password) {
+  const uid = currentUid();
+  if (!uid) throw new Error('Not signed in');
+  if (!apiKey || !password) throw new Error('Key and password required');
+
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(password, salt);
+  const ct   = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv }, key, new TextEncoder().encode(apiKey),
+  ));
+
+  const blob = new Uint8Array(salt.length + iv.length + ct.length);
+  blob.set(salt, 0);
+  blob.set(iv,   salt.length);
+  blob.set(ct,   salt.length + iv.length);
+  localStorage.setItem(storageKey(uid), bytesToB64(blob));
+
+  const hint = hintFor(apiKey);
+  localStorage.setItem(storageKey(uid) + '_hint', hint || '');
+
+  _cachedKey      = apiKey;
+  _cachedPassword = password;
+  _cachedForUser  = uid;
+
+  // Sync the hint server-side, best-effort.
+  dbUpdate('user_profiles', { id: 'eq.' + uid }, { api_key_hint: hint })
+    .catch(e => console.warn('api_key_hint sync failed:', e.message || e));
+}
+
+// promptForPassword: () => Promise<string|null>
+// Returns null if the user cancels the prompt.
+async function getApiKey({ promptForPassword } = {}) {
+  const uid = currentUid();
+  if (!uid) throw new Error('Not signed in');
+  if (_cachedKey && _cachedForUser === uid) return _cachedKey;
+
+  const raw = localStorage.getItem(storageKey(uid));
+  if (!raw) throw new Error('No API key set');
+  const blob = b64ToBytes(raw);
+  const salt = blob.slice(0, 16);
+  const iv   = blob.slice(16, 28);
+  const ct   = blob.slice(28);
+
+  // Try the cached password first (e.g. just-set in this session).
+  if (_cachedPassword) {
+    try {
+      const key = await deriveKey(_cachedPassword, salt);
+      const pt  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+      _cachedKey = new TextDecoder().decode(pt);
+      _cachedForUser = uid;
+      return _cachedKey;
+    } catch { _cachedPassword = null; }
+  }
+
+  if (!promptForPassword) throw new Error('Password required to unlock API key');
+
+  while (true) {
+    const pw = await promptForPassword();
+    if (pw == null) throw new Error('Cancelled');
+    try {
+      const key = await deriveKey(pw, salt);
+      const pt  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+      _cachedKey      = new TextDecoder().decode(pt);
+      _cachedPassword = pw;
+      _cachedForUser  = uid;
+      return _cachedKey;
+    } catch {
+      // loop; promptForPassword is expected to surface "wrong password" itself
+      // on the next iteration if it wants to.
+    }
+  }
+}
+
+async function clearApiKey() {
+  const uid = currentUid();
+  if (!uid) return;
+  try { localStorage.removeItem(storageKey(uid)); } catch {}
+  try { localStorage.removeItem(storageKey(uid) + '_hint'); } catch {}
+  _cachedKey = null;
+  _cachedPassword = null;
+  _cachedForUser = null;
+  dbUpdate('user_profiles', { id: 'eq.' + uid }, { api_key_hint: null })
+    .catch(e => console.warn('api_key_hint clear failed:', e.message || e));
+}
+
+function lockSession() {
+  _cachedKey = null;
+  _cachedPassword = null;
+  _cachedForUser = null;
+}
+
+  __mods["src/auth/apiKey.js"].hasApiKey = hasApiKey;
+  __mods["src/auth/apiKey.js"].getApiKeyHint = getApiKeyHint;
+  __mods["src/auth/apiKey.js"].setApiKey = setApiKey;
+  __mods["src/auth/apiKey.js"].getApiKey = getApiKey;
+  __mods["src/auth/apiKey.js"].clearApiKey = clearApiKey;
+  __mods["src/auth/apiKey.js"].lockSession = lockSession;
+}
+
+// ── src/ui/apiPasswordPrompt.js ──
+{
+  __mods["src/ui/apiPasswordPrompt.js"] = {};
+  const { $ } = __mods["src/ui/dom.js"];
+// Modal prompt for the API-key unlock password. Promise-based so callers can
+// `await promptApiPassword()` and get back the typed password (or null on cancel).
+//
+// The dialog markup lives inline in index.html (#apiPasswordDialog) so the
+// existing .dialog-overlay CSS handles styling and the overlay click-to-close.
+
+
+let _initialized = false;
+
+function ensureInit() {
+  if (_initialized) return;
+  _initialized = true;
+}
+
+function promptApiPassword({ title = 'Unlock API Key', sub = 'Enter the password you used when saving the key.' } = {}) {
+  ensureInit();
+  return new Promise(resolve => {
+    const dlg     = $('apiPasswordDialog');
+    const titleEl = $('apiPwTitle');
+    const subEl   = $('apiPwSub');
+    const input   = $('apiPwInput');
+    const cancel  = $('apiPwCancel');
+    const confirm = $('apiPwConfirm');
+    const errEl   = $('apiPwError');
+    if (!dlg || !input) { resolve(null); return; }
+
+    titleEl.textContent = title;
+    subEl.textContent   = sub;
+    input.value = '';
+    errEl.style.display = 'none';
+
+    function cleanup(val) {
+      dlg.classList.remove('active');
+      cancel.removeEventListener('click', onCancel);
+      confirm.removeEventListener('click', onConfirm);
+      input.removeEventListener('keydown', onKey);
+      dlg.removeEventListener('click', onBackdrop);
+      resolve(val);
+    }
+    function onCancel()  { cleanup(null); }
+    function onConfirm() {
+      const v = input.value;
+      if (!v) { errEl.textContent = 'Password required.'; errEl.style.display = ''; return; }
+      cleanup(v);
+    }
+    function onKey(e) {
+      if (e.key === 'Enter')  { e.preventDefault(); onConfirm(); }
+      if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+    }
+    function onBackdrop(e)   { if (e.target === dlg) onCancel(); }
+
+    cancel.addEventListener('click', onCancel);
+    confirm.addEventListener('click', onConfirm);
+    input.addEventListener('keydown', onKey);
+    dlg.addEventListener('click', onBackdrop);
+
+    dlg.classList.add('active');
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
+  __mods["src/ui/apiPasswordPrompt.js"].promptApiPassword = promptApiPassword;
+}
+
 // ── src/vision/client.js ──
 {
   __mods["src/vision/client.js"] = {};
-  const { VISION_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS } = __mods["src/config.js"];
-
-// Single seam for the Anthropic Messages API. Today the call goes direct from
-// the browser with no auth header — that only works inside the Claude.ai
-// artifact preview, which proxies the request. When wiring in real auth:
+  const { VISION_MODEL, VISION_ENDPOINT, VISION_MAX_TOKENS, VISION_PROXY_URL, SUPABASE_ANON_KEY } = __mods["src/config.js"];
+  const { getSession } = __mods["src/auth/authManager.js"];
+  const { hasApiKey, getApiKey } = __mods["src/auth/apiKey.js"];
+  const { events, EV } = __mods["src/state/session.js"];
+  const { promptApiPassword } = __mods["src/ui/apiPasswordPrompt.js"];
+  const { logAction } = __mods["src/data/actionsLog.js"];
+// Single seam for the Anthropic Messages API. Two paths:
 //
-//   1. Add a `getApiKey()` strategy (encrypted in localStorage, decrypted with
-//      a session password — see BLUEPRINT.md "Storage Strategy").
-//   2. Inject the headers below.
-//   3. Optionally proxy through a Supabase edge function so the key never
-//      leaves the device unencrypted.
+//   1. BYOK — the user has stored their own key (apiKey.js). We call
+//      api.anthropic.com directly from the browser with their key.
+//   2. Covered — we call the vision-proxy edge function with the user's
+//      Supabase JWT. The edge function enforces the per-user quota
+//      (10/day UTC, 100/lifetime) and forwards using our server-side key.
 
-async function visionRequest(messages) {
-  const headers = { 'Content-Type': 'application/json' };
-  // TODO: add auth when leaving the Claude.ai sandbox.
-  // headers['x-api-key']         = await getApiKey();
-  // headers['anthropic-version'] = '2023-06-01';
-  // headers['anthropic-dangerous-direct-browser-access'] = 'true';
 
-  const resp = await fetch(VISION_ENDPOINT, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: VISION_MODEL,
-      max_tokens: VISION_MAX_TOKENS,
-      messages,
-    }),
+
+
+
+
+
+// `export class` isn't picked up by build.mjs's EXPORT_DECL_RE; the const-assigned
+// class expression is functionally equivalent and goes through the rewriter.
+const QuotaExhaustedError = class QuotaExhaustedError extends Error {
+  constructor(detail) {
+    super('Vision quota exhausted');
+    this.name = 'QuotaExhaustedError';
+    this.detail = detail || {};
+  }
+};
+
+function payload(messages) {
+  return JSON.stringify({
+    model: VISION_MODEL,
+    max_tokens: VISION_MAX_TOKENS,
+    messages,
   });
-  if (!resp.ok) throw new Error('Vision API ' + resp.status);
-  const data = await resp.json();
-  const text = data.content
+}
+
+function parseAnthropic(data) {
+  const text = (data.content || [])
     .filter(b => b.type === 'text')
     .map(b => b.text)
     .join('')
     .replace(/```json|```/g, '')
     .trim();
   return JSON.parse(text);
+}
+
+async function _callBYOK(messages) {
+  const apiKey = await getApiKey({ promptForPassword: promptApiPassword });
+  const resp = await fetch(VISION_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: payload(messages),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error('Vision API ' + resp.status + (txt ? ': ' + txt.slice(0, 200) : ''));
+  }
+  return parseAnthropic(await resp.json());
+}
+
+async function _callProxy(messages) {
+  const s = getSession();
+  if (!s) throw new Error('Not signed in');
+  const resp = await fetch(VISION_PROXY_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + s.access_token,
+      'apikey':        SUPABASE_ANON_KEY,
+    },
+    body: payload(messages),
+  });
+
+  if (resp.status === 429) {
+    let detail = {};
+    try { detail = await resp.json(); } catch {}
+    logAction('vision_quota_exhausted', detail);
+    throw new QuotaExhaustedError(detail);
+  }
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error('Vision proxy ' + resp.status + (txt ? ': ' + txt.slice(0, 200) : ''));
+  }
+
+  logAction('vision_proxy_call', {});
+  events.emit(EV.VISION_CALLED);
+  return parseAnthropic(await resp.json());
+}
+
+async function visionRequest(messages) {
+  if (hasApiKey()) {
+    const result = await _callBYOK(messages);
+    logAction('vision_byok_call', {});
+    return result;
+  }
+  return _callProxy(messages);
 }
 
 function imageBlock(dataUrl) {
@@ -2539,6 +2605,7 @@ function textBlock(text) {
   return { type: 'text', text };
 }
 
+  __mods["src/vision/client.js"].QuotaExhaustedError = QuotaExhaustedError;
   __mods["src/vision/client.js"].visionRequest = visionRequest;
   __mods["src/vision/client.js"].imageBlock = imageBlock;
   __mods["src/vision/client.js"].textBlock = textBlock;
@@ -2845,10 +2912,12 @@ function parseExifDate(dateStr) {
   const { processUpload, cropFromImage } = __mods["src/image/process.js"];
   const { analyzeFullPhoto } = __mods["src/vision/analyze.js"];
   const { reIdentifyBatch } = __mods["src/vision/reidentify.js"];
+  const { QuotaExhaustedError } = __mods["src/vision/client.js"];
   const { randomPhrase } = __mods["src/assets/loadingPhrases.js"];
   const { DEV_TEST_IMAGE } = __mods["src/assets/devTestImage.js"];
   const { extractCaptureDate } = __mods["src/image/exif.js"];
   const { logAction } = __mods["src/data/actionsLog.js"];
+
 
 
 
@@ -2970,6 +3039,13 @@ function initReview() {
       const result = await analyzeFullPhoto(dataUrl, z.type, existing);
       handleAnalysisResult(dataUrl, result);
     } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        stopPhraseCycle();
+        close();
+        events.emit(EV.TOAST, { msg: 'Out of vision credits. Add your own API key in Settings.', kind: 'error' });
+        events.emit(EV.NAV_SETTINGS, { tab: 'api' });
+        return;
+      }
       console.error('Photo analysis failed:', err);
       showError(err.message || String(err));
     }
@@ -3255,6 +3331,12 @@ function initReview() {
       showReIDReviewScreen();
     } catch (err) {
       stopPhraseCycle();
+      if (err instanceof QuotaExhaustedError) {
+        close();
+        events.emit(EV.TOAST, { msg: 'Out of vision credits. Add your own API key in Settings.', kind: 'error' });
+        events.emit(EV.NAV_SETTINGS, { tab: 'api' });
+        return;
+      }
       console.error('Re-ID failed:', err);
       showError('Re-ID failed: ' + (err.message || err));
     }
@@ -3541,6 +3623,438 @@ function initAuthUI({ onLogin }) {
   __mods["src/auth/authUI.js"].initAuthUI = initAuthUI;
 }
 
+// ── src/ui/profileMenu.js ──
+{
+  __mods["src/ui/profileMenu.js"] = {};
+  const { $ } = __mods["src/ui/dom.js"];
+// Floating dropdown anchored to the account button. Replaces the old
+// confirm() → logout shortcut with a proper Settings + Sign out menu.
+
+
+function initProfileMenu({ onSettings, onSignout }) {
+  const menu = $('profileMenu');
+  if (!menu) return { toggle: () => {}, close: () => {} };
+
+  let open = false;
+
+  function position(anchor) {
+    const r = anchor.getBoundingClientRect();
+    menu.style.top   = (r.bottom + 6) + 'px';
+    menu.style.right = (window.innerWidth - r.right) + 'px';
+  }
+
+  function show(anchor) {
+    position(anchor);
+    menu.hidden = false;
+    menu.classList.add('open');
+    open = true;
+  }
+  function close() {
+    menu.classList.remove('open');
+    menu.hidden = true;
+    open = false;
+  }
+  function toggle(anchor) {
+    if (open) close(); else show(anchor);
+  }
+
+  menu.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    close();
+    if (act === 'settings') onSettings && onSettings();
+    if (act === 'signout')  onSignout  && onSignout();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!open) return;
+    if (e.target.closest('#profileMenu') || e.target.closest('#accountBtn')) return;
+    close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (open && e.key === 'Escape') close();
+  });
+
+  return { toggle, close };
+}
+
+  __mods["src/ui/profileMenu.js"].initProfileMenu = initProfileMenu;
+}
+
+// ── src/vision/quota.js ──
+{
+  __mods["src/vision/quota.js"] = {};
+  const { dbSelect } = __mods["src/auth/supabaseClient.js"];
+  const { getSession } = __mods["src/auth/authManager.js"];
+  const { events, EV } = __mods["src/state/session.js"];
+  const { VISION_DAILY_LIMIT, VISION_LIFETIME_LIMIT } = __mods["src/config.js"];
+// Client-side read of the vision_api_calls ledger for the Settings meter.
+// The edge function is the source of truth — this is purely for display.
+// RLS guarantees we only see our own rows.
+
+
+
+
+
+let _cache = null;     // { uid, summary, fetchedAt }
+const CACHE_MS = 30_000;
+
+events.on(EV.VISION_CALLED, () => { _cache = null; });
+
+function utcMidnight() {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function nextUtcMidnight() {
+  return utcMidnight() + 86_400_000;
+}
+
+async function getQuotaSummary({ force = false } = {}) {
+  const s = getSession();
+  if (!s) throw new Error('Not signed in');
+
+  if (!force && _cache && _cache.uid === s.user_id && (Date.now() - _cache.fetchedAt) < CACHE_MS) {
+    return _cache.summary;
+  }
+
+  const rows = await dbSelect('vision_api_calls', {
+    select: 'called_at',
+    filters: { user_id: 'eq.' + s.user_id },
+  });
+
+  const midnight = utcMidnight();
+  let usedToday = 0;
+  for (const r of rows) {
+    if (Date.parse(r.called_at) >= midnight) usedToday += 1;
+  }
+  const usedTotal = rows.length;
+
+  const summary = {
+    usedToday,
+    usedTotal,
+    dailyLimit:     VISION_DAILY_LIMIT,
+    lifetimeLimit:  VISION_LIFETIME_LIMIT,
+    remainingToday: Math.max(0, VISION_DAILY_LIMIT - usedToday),
+    remainingTotal: Math.max(0, VISION_LIFETIME_LIMIT - usedTotal),
+    exhausted:      usedToday >= VISION_DAILY_LIMIT || usedTotal >= VISION_LIFETIME_LIMIT,
+    resetAt:        nextUtcMidnight(),
+  };
+
+  _cache = { uid: s.user_id, summary, fetchedAt: Date.now() };
+  return summary;
+}
+
+function invalidateQuotaCache() { _cache = null; }
+
+  __mods["src/vision/quota.js"].getQuotaSummary = getQuotaSummary;
+  __mods["src/vision/quota.js"].invalidateQuotaCache = invalidateQuotaCache;
+}
+
+// ── src/ui/settings.js ──
+{
+  __mods["src/ui/settings.js"] = {};
+  const { $, escapeHtml: esc } = __mods["src/ui/dom.js"];
+  const { events, EV, session } = __mods["src/state/session.js"];
+  const { dbSelect, dbUpdate, dbDelete } = __mods["src/auth/supabaseClient.js"];
+  const { getSession, logout } = __mods["src/auth/authManager.js"];
+  const { getQuotaSummary } = __mods["src/vision/quota.js"];
+  const { hasApiKey, setApiKey, clearApiKey, getApiKeyHint, lockSession } = __mods["src/auth/apiKey.js"];
+  const { promptApiPassword } = __mods["src/ui/apiPasswordPrompt.js"];
+// Settings screen — three tabs (API, Garden, Account).
+//
+// API tab     — vision quota meter + BYOK (bring your own key) input.
+// Garden tab  — zip code + share-globally toggle (writes to user_profiles).
+// Account tab — email, sign-out, delete account.
+//
+// Pattern mirrors the zone detail screen: a .screen with .tabs +
+// .tab-content panes. show(tab) opens to the requested tab.
+
+
+
+
+
+
+
+
+const TABS = ['api', 'garden', 'account'];
+
+function initSettings() {
+  const screen     = $('settingsScreen');
+  const backBtn    = $('settingsBack');
+  const tabBtns    = screen.querySelectorAll('.tab[data-stab]');
+  const panes = {
+    api:     $('settingsApi'),
+    garden:  $('settingsGarden'),
+    account: $('settingsAccount'),
+  };
+
+  let currentTab = 'api';
+
+  // ── Tabs ─────────────────────────────────────────────────────────────
+  function setTab(t) {
+    if (!TABS.includes(t)) t = 'api';
+    currentTab = t;
+    tabBtns.forEach(b => b.classList.toggle('active', b.dataset.stab === t));
+    for (const k of TABS) {
+      const p = panes[k];
+      if (!p) continue;
+      const active = (k === t);
+      p.classList.toggle('active', active);
+      p.style.display = active ? '' : 'none';
+    }
+    renderPane(t);
+  }
+
+  tabBtns.forEach(b => b.addEventListener('click', () => setTab(b.dataset.stab)));
+  backBtn.addEventListener('click', close);
+
+  // ── API pane ─────────────────────────────────────────────────────────
+  async function renderApi() {
+    const p = panes.api;
+    p.innerHTML = `
+      <div class="settings-section">
+        <div class="settings-label">Vision usage</div>
+        <div class="quota-row">
+          <div class="quota-name">Today</div>
+          <div class="quota-num" id="quotaTodayNum">— / —</div>
+        </div>
+        <div class="xp-bar quota-bar"><div class="xp-fill" id="quotaTodayBar" style="width:0%"></div></div>
+        <div class="quota-row" style="margin-top:14px">
+          <div class="quota-name">All time</div>
+          <div class="quota-num" id="quotaTotalNum">— / —</div>
+        </div>
+        <div class="xp-bar quota-bar"><div class="xp-fill" id="quotaTotalBar" style="width:0%"></div></div>
+        <div class="settings-hint" id="quotaResetHint">Resets daily at midnight UTC.</div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-label">Your Anthropic API key</div>
+        <div class="settings-hint">
+          Once your covered usage runs out you can bring your own key.
+          We encrypt it on this device with a password you choose — it never
+          touches our server unencrypted.
+        </div>
+        <div id="apiKeyArea"></div>
+      </div>
+    `;
+
+    try {
+      const q = await getQuotaSummary();
+      $('quotaTodayNum').textContent = `${q.usedToday} / ${q.dailyLimit}`;
+      $('quotaTotalNum').textContent = `${q.usedTotal} / ${q.lifetimeLimit}`;
+      $('quotaTodayBar').style.width = Math.min(100, (q.usedToday / q.dailyLimit) * 100) + '%';
+      $('quotaTotalBar').style.width = Math.min(100, (q.usedTotal / q.lifetimeLimit) * 100) + '%';
+      const hrs = Math.max(1, Math.round((q.resetAt - Date.now()) / 3_600_000));
+      $('quotaResetHint').textContent = `Daily quota resets in ~${hrs}h (midnight UTC).`;
+    } catch (e) {
+      $('quotaResetHint').textContent = 'Could not load usage: ' + (e.message || e);
+    }
+
+    renderApiKeyArea();
+  }
+
+  function renderApiKeyArea() {
+    const area = $('apiKeyArea');
+    if (!area) return;
+    if (hasApiKey()) {
+      const hint = getApiKeyHint();
+      area.innerHTML = `
+        <div class="key-status">
+          <div class="key-status-text">
+            <div class="settings-row-title">Key on file</div>
+            <div class="settings-row-sub">${hint ? esc(hint) : 'Stored locally · encrypted'}</div>
+          </div>
+          <button class="btn btn-delete" id="removeKeyBtn" style="flex:0 0 auto; min-width:0; padding:8px 14px">Remove</button>
+        </div>
+      `;
+      $('removeKeyBtn').addEventListener('click', async () => {
+        if (!confirm('Remove the stored API key from this device?')) return;
+        await clearApiKey();
+        renderApiKeyArea();
+        events.emit(EV.TOAST, { msg: 'API key removed.' });
+      });
+    } else {
+      area.innerHTML = `
+        <label>API key</label>
+        <input type="password" id="newApiKey" placeholder="sk-ant-...">
+        <label>Password (to encrypt it on this device)</label>
+        <input type="password" id="newApiKeyPw" placeholder="Choose any password">
+        <div class="settings-hint" style="margin-top:6px">You'll be asked for this password the next time you use the app on this device.</div>
+        <div class="dialog-buttons" style="margin-top:14px">
+          <button class="btn btn-confirm" id="saveApiKeyBtn">Save Key</button>
+        </div>
+        <div class="auth-error" id="apiKeyErr" style="display:none; margin-top:10px"></div>
+      `;
+      $('saveApiKeyBtn').addEventListener('click', async () => {
+        const k = $('newApiKey').value.trim();
+        const pw = $('newApiKeyPw').value;
+        const err = $('apiKeyErr');
+        err.style.display = 'none';
+        if (!k || !pw) { err.textContent = 'Both fields required.'; err.style.display = ''; return; }
+        if (!k.startsWith('sk-')) { err.textContent = "That doesn't look like an Anthropic key (should start with sk-)."; err.style.display = ''; return; }
+        try {
+          await setApiKey(k, pw);
+          renderApiKeyArea();
+          events.emit(EV.TOAST, { msg: 'API key saved on this device.' });
+        } catch (e) {
+          err.textContent = e.message || String(e);
+          err.style.display = '';
+        }
+      });
+    }
+  }
+
+  // ── Garden pane ──────────────────────────────────────────────────────
+  async function renderGarden() {
+    const p = panes.garden;
+    p.innerHTML = `
+      <div class="settings-section">
+        <div class="settings-label">Garden preferences</div>
+        <label>Zip code</label>
+        <input type="text" id="prefZip" placeholder="e.g. 78704" maxlength="10" inputmode="numeric" autocomplete="postal-code">
+        <div class="settings-hint">Used for climate-zone hints in plant ID prompts.</div>
+
+        <label style="margin-top:18px">Share anonymized data</label>
+        <label class="toggle">
+          <input type="checkbox" id="prefShare">
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label">Help improve plant ID by sharing anonymized counts (no photos, no names).</span>
+        </label>
+
+        <div class="dialog-buttons" style="margin-top:18px">
+          <button class="btn btn-confirm" id="savePrefsBtn">Save</button>
+        </div>
+        <div class="auth-error" id="prefsErr" style="display:none; margin-top:10px"></div>
+      </div>
+    `;
+
+    const s = getSession();
+    if (!s) return;
+    try {
+      const rows = await dbSelect('user_profiles', { filters: { id: 'eq.' + s.user_id } });
+      const profile = rows[0] || {};
+      $('prefZip').value = profile.zip_code || '';
+      $('prefShare').checked = profile.share_data_globally !== false;
+    } catch (e) {
+      const err = $('prefsErr');
+      err.textContent = 'Could not load preferences: ' + (e.message || e);
+      err.style.display = '';
+    }
+
+    $('savePrefsBtn').addEventListener('click', async () => {
+      const err = $('prefsErr');
+      err.style.display = 'none';
+      const zip = $('prefZip').value.trim();
+      const share = $('prefShare').checked;
+      try {
+        await dbUpdate('user_profiles', { id: 'eq.' + s.user_id }, {
+          zip_code: zip || null,
+          zip_source: zip ? 'manual' : 'none',
+          share_data_globally: share,
+        });
+        events.emit(EV.TOAST, { msg: 'Preferences saved.' });
+      } catch (e) {
+        err.textContent = 'Save failed: ' + (e.message || e);
+        err.style.display = '';
+      }
+    });
+  }
+
+  // ── Account pane ─────────────────────────────────────────────────────
+  function renderAccount() {
+    const p = panes.account;
+    const email = session.currentUser?.email || '—';
+    p.innerHTML = `
+      <div class="settings-section">
+        <div class="settings-label">Account</div>
+        <div class="settings-row">
+          <div class="settings-row-title">Email</div>
+          <div class="settings-row-sub">${esc(email)}</div>
+        </div>
+        <div class="dialog-buttons" style="margin-top:18px">
+          <button class="btn btn-cancel" id="signOutBtn">Sign out</button>
+        </div>
+      </div>
+
+      <div class="settings-section danger-zone">
+        <div class="settings-label danger">Danger zone</div>
+        <div class="settings-hint">
+          Permanently delete all your gardens, zones, plants, and journal entries.
+          You'll be signed out. Your auth account stays — sign up again with the
+          same email to start over.
+        </div>
+        <div class="dialog-buttons" style="margin-top:14px">
+          <button class="btn btn-delete" id="deleteAcctBtn">Delete my data</button>
+        </div>
+        <div class="auth-error" id="deleteErr" style="display:none; margin-top:10px"></div>
+      </div>
+    `;
+
+    $('signOutBtn').addEventListener('click', async () => {
+      lockSession();
+      await logout();
+      window.location.reload();
+    });
+
+    $('deleteAcctBtn').addEventListener('click', async () => {
+      const ok1 = confirm('This will delete all your gardens, zones, plants, and journal entries. Continue?');
+      if (!ok1) return;
+      const ok2 = prompt('Type DELETE to confirm.');
+      if (ok2 !== 'DELETE') return;
+      const s = getSession();
+      if (!s) return;
+      const err = $('deleteErr');
+      err.style.display = 'none';
+      try {
+        // user_profiles and gardens both FK to auth.users, not to each other,
+        // so we have to delete gardens (cascades to zones → plants/journal)
+        // and the per-user log tables explicitly.
+        await dbDelete('gardens',          { user_id: 'eq.' + s.user_id });
+        await dbDelete('user_action_log',  { user_id: 'eq.' + s.user_id });
+        await dbDelete('vision_api_calls', { user_id: 'eq.' + s.user_id });
+        await dbDelete('user_profiles',    { id:      'eq.' + s.user_id });
+        await clearApiKey();
+        lockSession();
+        await logout();
+        window.location.reload();
+      } catch (e) {
+        err.textContent = 'Delete failed: ' + (e.message || e);
+        err.style.display = '';
+      }
+    });
+  }
+
+  function renderPane(t) {
+    if (t === 'api')     renderApi();
+    if (t === 'garden')  renderGarden();
+    if (t === 'account') renderAccount();
+  }
+
+  // ── Show / close ─────────────────────────────────────────────────────
+  function show(tab) {
+    setTab(tab || 'api');
+    document.querySelectorAll('.screen.active').forEach(s => s.classList.remove('active'));
+    screen.classList.add('active');
+  }
+  function close() {
+    screen.classList.remove('active');
+    events.emit(EV.NAV_OVERVIEW);
+  }
+
+  // Re-render API tab if a vision call happened while Settings was open.
+  events.on(EV.VISION_CALLED, () => {
+    if (currentTab === 'api' && screen.classList.contains('active')) renderApi();
+  });
+
+  return { show, close };
+}
+
+  __mods["src/ui/settings.js"].initSettings = initSettings;
+}
+
 // ── src/main.js ──
 {
   __mods["src/main.js"] = {};
@@ -3558,8 +4072,14 @@ function initAuthUI({ onLogin }) {
   const { initAuth, logout } = __mods["src/auth/authManager.js"];
   const { initAuthUI } = __mods["src/auth/authUI.js"];
   const { logAction } = __mods["src/data/actionsLog.js"];
+  const { initProfileMenu } = __mods["src/ui/profileMenu.js"];
+  const { initSettings } = __mods["src/ui/settings.js"];
+  const { lockSession } = __mods["src/auth/apiKey.js"];
 // Entry point. Wires all modules together behind an auth gate.
 // Auth check happens first; the app does not init until a session exists.
+
+
+
 
 
 
@@ -3679,16 +4199,18 @@ initToast();
       if (uploadBtnIsLongPress) { e.preventDefault(); uploadBtnIsLongPress = false; }
     });
 
-    // Account / logout button
+    // Settings screen + profile dropdown.
+    const settings = initSettings();
+    const profileMenu = initProfileMenu({
+      onSettings: () => events.emit(EV.NAV_SETTINGS, { tab: 'api' }),
+      onSignout:  async () => { lockSession(); await logout(); window.location.reload(); },
+    });
+
     const accountBtn = $('accountBtn');
     if (accountBtn) {
-      accountBtn.addEventListener('click', async () => {
-        const email = session.currentUser ? session.currentUser.email : 'signed in';
-        const confirmed = confirm(`Signed in as ${email}\n\nSign out?`);
-        if (confirmed) {
-          await logout();
-          window.location.reload();
-        }
+      accountBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileMenu.toggle(accountBtn);
       });
     }
 
@@ -3700,6 +4222,7 @@ initToast();
       overview.renderLevel();
     });
     events.on(EV.NAV_ZONE, ({ zoneId }) => zoneScreen.show(zoneId));
+    events.on(EV.NAV_SETTINGS, ({ tab } = {}) => settings.show(tab));
     events.on('zone:edit', ({ zoneId }) => zoneDlg.open(zoneId));
     events.on('care:close', () => carePanel.close());
 

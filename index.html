@@ -42,6 +42,12 @@
   <label class="fab" id="addZoneBtn" for="photoInputNewZone" title="Add zone">+</label>
 </div>
 
+<!-- ─── Profile dropdown ───────────────────────────────────────────── -->
+<div class="profile-menu" id="profileMenu" hidden>
+  <button class="pm-item" data-act="settings">⚙ Settings</button>
+  <button class="pm-item" data-act="signout">⎋ Sign out</button>
+</div>
+
 <!-- ─── Zone Detail Screen ─────────────────────────────────────────── -->
 <div class="screen" id="zoneScreen">
   <div class="detail-header">
@@ -85,6 +91,25 @@
   <div class="tab-content" id="tabJournal" style="display:none">
     <div class="list-content" id="journalList"></div>
   </div>
+</div>
+
+<!-- ─── Settings Screen ────────────────────────────────────────────── -->
+<div class="screen" id="settingsScreen">
+  <div class="detail-header">
+    <button class="back-btn" id="settingsBack">←</button>
+    <div class="detail-title">
+      <h2>Settings</h2>
+      <div class="sub">Account & preferences</div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-stab="api">API</button>
+    <button class="tab" data-stab="garden">Garden</button>
+    <button class="tab" data-stab="account">Account</button>
+  </div>
+  <div class="tab-content settings-pane active" id="settingsApi"></div>
+  <div class="tab-content settings-pane" id="settingsGarden" style="display:none"></div>
+  <div class="tab-content settings-pane" id="settingsAccount" style="display:none"></div>
 </div>
 
 <!-- ─── Press rings ────────────────────────────────────────────────── -->
@@ -163,6 +188,21 @@
       <button class="btn btn-cancel" id="plantCancel">Cancel</button>
       <button class="btn btn-delete" id="plantDelete" style="display:none">Delete</button>
       <button class="btn btn-confirm" id="plantConfirm">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── API Password Prompt ────────────────────────────────────────── -->
+<div class="dialog-overlay" id="apiPasswordDialog">
+  <div class="dialog">
+    <h3 id="apiPwTitle">Unlock API Key</h3>
+    <p class="dlg-sub" id="apiPwSub">Enter the password you used when saving the key.</p>
+    <label>Password</label>
+    <input type="password" id="apiPwInput" autocomplete="current-password">
+    <div class="auth-error" id="apiPwError" style="display:none; margin-top:10px"></div>
+    <div class="dialog-buttons">
+      <button class="btn btn-cancel" id="apiPwCancel">Cancel</button>
+      <button class="btn btn-confirm" id="apiPwConfirm">Unlock</button>
     </div>
   </div>
 </div>
