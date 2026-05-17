@@ -1,6 +1,6 @@
 import { $, escapeHtml as esc } from './dom.js';
 import { repo } from '../data/repo.js';
-import { getCare } from '../care/careDb.js';
+import { getCare } from '../care/careService.js';
 
 export function initCarePanel() {
   const panel = $('carePanel');
@@ -9,13 +9,15 @@ export function initCarePanel() {
   const body  = $('careBody');
   const close = $('careClose');
 
-  function openById(plantId) {
+  async function openById(plantId) {
     const p = repo.plants.get(plantId);
     if (!p) return;
     const label = p.display_label || p.species || 'Plant';
     title.textContent = label;
     sub.textContent = p.category || '';
-    const info = getCare(label);
+    panel.classList.add('open');
+    body.innerHTML = '<div style="color:#aaa;font-size:0.65rem;padding:10px 0">Loading care info…</div>';
+    const info = await getCare(p);
     if (!info) {
       body.innerHTML = `<div style="color:#e88;font-size:0.65rem;padding:10px 0">No care info available for "${esc(label)}".</div>`;
     } else {
@@ -39,7 +41,6 @@ export function initCarePanel() {
       }
       body.innerHTML = html;
     }
-    panel.classList.add('open');
   }
 
   function closePanel() { panel.classList.remove('open'); }
