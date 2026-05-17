@@ -1,0 +1,26 @@
+name: Build Artifact
+
+on:
+  push:
+    branches: [main, "claude/new-session-drRJy"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build artifact
+        run: node build.mjs --artifact
+      - name: Publish to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-build
+          name: Latest Build
+          prerelease: true
+          files: dist/garden-artifact.html
