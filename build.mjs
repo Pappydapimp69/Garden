@@ -44,6 +44,31 @@ function loadModule(id) {
       'export const ARTIFACT_MODE     = true;',
     );
   }
+  // Strip modules unreachable when ARTIFACT_MODE=true. Keeps same-shape exports
+  // so call sites in main.js (initSettings, initProfileMenu, ...) and the
+  // BYOK/proxy branches in vision/client.js still resolve, but terser DCE-
+  // eliminates the bodies, saving ~15–20 KB in the paste-friendly bundle.
+  if (ARTIFACT_MODE && id === 'src/auth/apiKey.js') {
+    src = `export function hasApiKey(){return false}
+export function getApiKeyHint(){return null}
+export async function setApiKey(){}
+export async function getApiKey(){throw new Error('disabled in artifact mode')}
+export async function clearApiKey(){}
+export function lockSession(){}`;
+  }
+  if (ARTIFACT_MODE && id === 'src/ui/apiPasswordPrompt.js') {
+    src = `export function promptApiPassword(){return Promise.reject(new Error('disabled in artifact mode'))}`;
+  }
+  if (ARTIFACT_MODE && id === 'src/vision/quota.js') {
+    src = `export async function getQuotaSummary(){return null}
+export function invalidateQuotaCache(){}`;
+  }
+  if (ARTIFACT_MODE && id === 'src/ui/profileMenu.js') {
+    src = `export function initProfileMenu(){return {}}`;
+  }
+  if (ARTIFACT_MODE && id === 'src/ui/settings.js') {
+    src = `export function initSettings(){return {show(){},close(){}}}`;
+  }
 
   const deps = [];
   let body = src.replace(IMPORT_RE, (_m, names, importPath) => {
