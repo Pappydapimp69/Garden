@@ -130,3 +130,60 @@ alter table public.global_action_log enable row level security;
 create policy "authed_insert" on public.global_action_log
   for insert with check (auth.uid() is not null);
 -- No SELECT policy: only service role can read global logs
+
+-- ── Vision API free-tier quota ────────────────────────────────────────────────
+-- Master key (Supabase secret ANTHROPIC_API_KEY) funds 10 calls/day per user
+-- up to a per-account lifetime cap of 100. After that, users must supply
+-- their own Anthropic key (sent in the x-user-api-key header by the client).
+alter table public.user_profiles
+  add column if not exists vision_calls_today    int  not null default 0,
+  add column if not exists vision_calls_total    int  not null default 0,
+  add column if not exists vision_last_call_date date;
+
+-- Atomic check + increment. Returns whether the call is allowed under the
+-- master-key quota and the post-increment counters. SECURITY DEFINER so the
+-- update bypasses RLS while still using auth.uid() to identify the caller.
+create or replace function public.try_use_vision_quota()
+returns table(allowed boolean, today_used int, total_used int, daily_limit int, lifetime_limit int)
+language plpgsql security definer as $$
+declare
+  v_uid   uuid := auth.uid();
+  v_today date := current_date;
+  v_t     int;
+  v_total int;
+  v_last  date;
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select vision_calls_today, vision_calls_total, vision_last_call_date
+    into v_t, v_total, v_last
+    from public.user_profiles where id = v_uid for update;
+
+  if not found then
+    -- First-time caller: create a profile row so the counters have somewhere to live.
+    insert into public.user_profiles (id) values (v_uid)
+      on conflict (id) do nothing;
+    v_t := 0; v_total := 0; v_last := null;
+  end if;
+
+  if v_last is null or v_last <> v_today then
+    v_t := 0;
+  end if;
+
+  if v_t >= 10 or v_total >= 100 then
+    return query select false, v_t, v_total, 10, 100;
+    return;
+  end if;
+
+  update public.user_profiles
+    set vision_calls_today    = v_t + 1,
+        vision_calls_total    = coalesce(vision_calls_total, 0) + 1,
+        vision_last_call_date = v_today
+    where id = v_uid;
+
+  return query select true, v_t + 1, coalesce(v_total, 0) + 1, 10, 100;
+end $$;
+
+grant execute on function public.try_use_vision_quota() to authenticated;

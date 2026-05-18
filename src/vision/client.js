@@ -1,23 +1,38 @@
-import { VISION_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS } from '../config.js';
+import {
+  VISION_PROXY_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS,
+  SUPABASE_ANON_KEY, LOCAL_API_KEY_STORAGE,
+} from '../config.js';
+import { getSession } from '../auth/authManager.js';
 
-// Single seam for the Anthropic Messages API. Today the call goes direct from
-// the browser with no auth header — that only works inside the Claude.ai
-// artifact preview, which proxies the request. When wiring in real auth:
-//
-//   1. Add a `getApiKey()` strategy (encrypted in localStorage, decrypted with
-//      a session password — see BLUEPRINT.md "Storage Strategy").
-//   2. Inject the headers below.
-//   3. Optionally proxy through a Supabase edge function so the key never
-//      leaves the device unencrypted.
+// Thrown when the Supabase edge function reports the master-key quota is
+// exhausted. The UI catches this to prompt the user for their own API key.
+export class QuotaError extends Error {
+  constructor(info) {
+    super('Free vision quota exceeded');
+    this.name = 'QuotaError';
+    this.code = 'quota_exceeded';
+    this.info = info || {};
+  }
+}
 
-export async function visionRequest(messages) {
-  const headers = { 'Content-Type': 'application/json' };
-  // TODO: add auth when leaving the Claude.ai sandbox.
-  // headers['x-api-key']         = await getApiKey();
-  // headers['anthropic-version'] = '2023-06-01';
-  // headers['anthropic-dangerous-direct-browser-access'] = 'true';
+function getUserApiKey() {
+  try { return localStorage.getItem(LOCAL_API_KEY_STORAGE) || ''; }
+  catch (e) { return ''; }
+}
 
-  const resp = await fetch(VISION_ENDPOINT, {
+async function callProxy(messages) {
+  const s = getSession();
+  if (!s || !s.access_token) throw new Error('Not signed in');
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + s.access_token,
+  };
+  const userKey = getUserApiKey();
+  if (userKey) headers['x-user-api-key'] = userKey;
+
+  const resp = await fetch(VISION_PROXY_ENDPOINT, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -26,8 +41,25 @@ export async function visionRequest(messages) {
       messages,
     }),
   });
-  if (!resp.ok) throw new Error('Vision API ' + resp.status);
-  const data = await resp.json();
+
+  if (resp.status === 402) {
+    let info = {};
+    try { info = await resp.json(); } catch (e) {}
+    throw new QuotaError(info);
+  }
+  if (!resp.ok) {
+    let msg = 'Vision API ' + resp.status;
+    try {
+      const err = await resp.json();
+      msg = err.error?.message || err.message || err.error || msg;
+    } catch (e) {}
+    throw new Error(msg);
+  }
+  return resp.json();
+}
+
+export async function visionRequest(messages) {
+  const data = await callProxy(messages);
   const text = data.content
     .filter(b => b.type === 'text')
     .map(b => b.text)

@@ -78,7 +78,10 @@ export async function createSupabaseRepo(session) {
       get: () => db.user,
       update: (patch) => {
         db.user = { ...db.user, ...patch };
-        push(() => dbUpsert('user_profiles', { ...db.user, id: uid }));
+        // PATCH only the changed fields. A full upsert would re-send the
+        // cached vision_calls_* / vision_last_call_date values and undo the
+        // server-side increments performed by try_use_vision_quota().
+        push(() => dbUpdate('user_profiles', { 'id': 'eq.' + uid }, patch));
         return db.user;
       },
     },

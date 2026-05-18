@@ -12,6 +12,7 @@ import { initZoneDialog } from './ui/zoneDialog.js';
 import { initZone } from './ui/zone.js';
 import { initOverview, showOverview as showOverviewScreen } from './ui/overview.js';
 import { initReview } from './ui/review.js';
+import { initApiKeyDialog } from './ui/apiKeyDialog.js';
 import { initAuth, logout } from './auth/authManager.js';
 import { initAuthUI } from './auth/authUI.js';
 import { logAction } from './data/actionsLog.js';
@@ -47,6 +48,7 @@ initToast();
       onAddPlantAtPct:      () => plantDlg.openNew(),
     });
 
+    initApiKeyDialog();
     const review = initReview();
 
     // Two file inputs, one per flow. Labels open the native picker.

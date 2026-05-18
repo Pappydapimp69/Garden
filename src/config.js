@@ -20,11 +20,15 @@ export const MAX_IMAGE_DIM = 1600;
 export const IMAGE_QUALITY = 0.82;
 export const REID_CROP_PCT = 25;
 
-// Vision model + endpoint. Swap here when migrating to a server-side proxy or a different model.
-export const VISION_MODEL    = 'claude-sonnet-4-20250514';
-export const VISION_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+// Vision model. The endpoint is now the Supabase Edge Function `vision`, which
+// proxies to Anthropic with either the master key (free-tier quota) or the
+// user's own key (sent in `x-user-api-key`) once they exceed the quota.
+export const VISION_MODEL      = 'claude-sonnet-4-20250514';
 export const VISION_MAX_TOKENS = 2000;
 
 // Supabase project credentials (anon/public key — safe to ship in client code).
 export const SUPABASE_URL      = 'https://czoaeombqqhgyqbsetlj.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_LDKc3zPhBInG-DpInW0gLw_3GNt7MMP';
+
+export const VISION_PROXY_ENDPOINT  = SUPABASE_URL + '/functions/v1/vision';
+export const LOCAL_API_KEY_STORAGE  = 'garden:apiKey';

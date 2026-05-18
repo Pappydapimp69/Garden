@@ -6,6 +6,8 @@ import { CONF_HIGH, CONF_MED } from '../config.js';
 import { processUpload, cropFromImage } from '../image/process.js';
 import { analyzeFullPhoto } from '../vision/analyze.js';
 import { reIdentifyBatch } from '../vision/reidentify.js';
+import { QuotaError } from '../vision/client.js';
+import { openApiKeyDialog } from './apiKeyDialog.js';
 import { randomPhrase } from '../assets/loadingPhrases.js';
 import { DEV_TEST_IMAGE } from '../assets/devTestImage.js';
 import { extractCaptureDate } from '../image/exif.js';
@@ -94,6 +96,23 @@ export function initReview() {
     return c === 'fruiting' ? '🍅' : c === 'herb' ? '🌿' : c === 'flowering' ? '🌸' : '❓';
   }
 
+  // Run a vision call. If the free quota is exhausted, prompt the user for
+  // their own API key and retry once. If they cancel, surface the quota error.
+  async function withQuotaRetry(fn) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof QuotaError) {
+        stopPhraseCycle();
+        const ok = await openApiKeyDialog(e.info);
+        if (!ok) throw e;
+        startPhraseCycle('reviewProcessingText');
+        return await fn();
+      }
+      throw e;
+    }
+  }
+
   // ── Public entry: handle a photo (file or dev image) ──────────────
   async function handlePhoto(fileOrDataUrl) {
     if (!session.currentZoneId) {
@@ -117,7 +136,7 @@ export function initReview() {
         : await processUpload(fileOrDataUrl);
       imgEl.src = dataUrl;
       const existing = repo.plants.listByZone(z.id);
-      const result = await analyzeFullPhoto(dataUrl, z.type, existing);
+      const result = await withQuotaRetry(() => analyzeFullPhoto(dataUrl, z.type, existing));
       handleAnalysisResult(dataUrl, result);
     } catch (err) {
       console.error('Photo analysis failed:', err);
@@ -398,7 +417,9 @@ export function initReview() {
       reidContext.crops = crops;
 
       const confirmedPlants = [...repo.plants.listByZone(z.id), ...accepted];
-      const result = await reIdentifyBatch(crops.map(c => c.url), reidContext.rejected, z.type, confirmedPlants);
+      const result = await withQuotaRetry(
+        () => reIdentifyBatch(crops.map(c => c.url), reidContext.rejected, z.type, confirmedPlants),
+      );
       reidContext.suggestions = result.crops || [];
 
       stopPhraseCycle();

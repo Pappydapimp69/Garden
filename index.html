@@ -180,6 +180,24 @@
   <div class="care-body" id="careBody"></div>
 </div>
 
+<!-- ─── API Key Dialog (shown when free vision quota is exhausted) ─── -->
+<div class="dialog-overlay" id="apiKeyDialog">
+  <div class="dialog">
+    <h3>Free vision quota used up</h3>
+    <p class="dlg-sub" id="apiKeyDialogSub">Add your own Anthropic key to continue.</p>
+    <div class="auth-error" id="apiKeyError" style="display:none"></div>
+    <label>Anthropic API key</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off">
+    <p style="font-size:0.55rem; color:#5a7a4a; line-height:1.6; margin-top:10px;">
+      Stored only in this browser (localStorage). Never sent to our servers — passed through to Anthropic on each request. Get one at <span style="color:#a8d878">console.anthropic.com</span>.
+    </p>
+    <div class="dialog-buttons">
+      <button class="btn btn-cancel" id="apiKeyCancel">Cancel</button>
+      <button class="btn btn-confirm" id="apiKeyConfirm">Save &amp; retry</button>
+    </div>
+  </div>
+</div>
+
 <!-- ─── Toast ──────────────────────────────────────────────────────── -->
 <div class="toast" id="toast"></div>
 
