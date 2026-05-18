@@ -38,6 +38,12 @@ function loadModule(id) {
   if (ARTIFACT_MODE && id === 'src/assets/devTestImage.js') {
     src = "export const DEV_TEST_IMAGE = '';";
   }
+  if (ARTIFACT_MODE && id === 'src/config.js') {
+    src = src.replace(
+      'export const ARTIFACT_MODE     = false;',
+      'export const ARTIFACT_MODE     = true;',
+    );
+  }
 
   const deps = [];
   let body = src.replace(IMPORT_RE, (_m, names, importPath) => {

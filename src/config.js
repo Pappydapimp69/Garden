@@ -20,11 +20,18 @@ export const MAX_IMAGE_DIM = 1600;
 export const IMAGE_QUALITY = 0.82;
 export const REID_CROP_PCT = 25;
 
-// Vision model. The endpoint is now the Supabase Edge Function `vision`, which
-// proxies to Anthropic with either the master key (free-tier quota) or the
-// user's own key (sent in `x-user-api-key`) once they exceed the quota.
+// Build mode. Rewritten to `true` by build.mjs when invoked with --artifact.
+// Artifact builds (for the Claude.ai sandbox) bypass the Supabase proxy and
+// call api.anthropic.com directly with no key — Claude.ai's sandbox proxies
+// the request at no cost. Production builds (Pages) keep ARTIFACT_MODE=false
+// and route through `/functions/v1/vision`.
+export const ARTIFACT_MODE     = false;
+
+// Vision model. The endpoint is the Supabase Edge Function `vision` in
+// production; in --artifact builds the client falls back to VISION_ENDPOINT.
 export const VISION_MODEL      = 'claude-sonnet-4-20250514';
 export const VISION_MAX_TOKENS = 2000;
+export const VISION_ENDPOINT   = 'https://api.anthropic.com/v1/messages';
 
 // Supabase project credentials (anon/public key — safe to ship in client code).
 export const SUPABASE_URL      = 'https://czoaeombqqhgyqbsetlj.supabase.co';

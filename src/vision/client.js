@@ -1,11 +1,12 @@
 import {
-  VISION_PROXY_ENDPOINT, VISION_MODEL, VISION_MAX_TOKENS,
+  ARTIFACT_MODE, VISION_ENDPOINT, VISION_PROXY_ENDPOINT,
+  VISION_MODEL, VISION_MAX_TOKENS,
   SUPABASE_ANON_KEY, LOCAL_API_KEY_STORAGE,
 } from '../config.js';
 import { getSession } from '../auth/authManager.js';
 
 // Thrown when the Supabase edge function reports the master-key quota is
-// exhausted. The UI catches this to prompt the user for their own API key.
+// exhausted. Only ever fires in production builds (ARTIFACT_MODE=false).
 export class QuotaError extends Error {
   constructor(info) {
     super('Free vision quota exceeded');
@@ -18,6 +19,30 @@ export class QuotaError extends Error {
 function getUserApiKey() {
   try { return localStorage.getItem(LOCAL_API_KEY_STORAGE) || ''; }
   catch (e) { return ''; }
+}
+
+// Direct call to Anthropic with no auth — only works inside the Claude.ai
+// artifact sandbox, which proxies the request on its end. Used by --artifact
+// builds so beta testing doesn't burn API credits.
+async function callDirect(messages) {
+  const resp = await fetch(VISION_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: VISION_MODEL,
+      max_tokens: VISION_MAX_TOKENS,
+      messages,
+    }),
+  });
+  if (!resp.ok) {
+    let msg = 'Vision API ' + resp.status;
+    try {
+      const err = await resp.json();
+      msg = err.error?.message || err.message || err.error || msg;
+    } catch (e) {}
+    throw new Error(msg);
+  }
+  return resp.json();
 }
 
 async function callProxy(messages) {
@@ -59,7 +84,7 @@ async function callProxy(messages) {
 }
 
 export async function visionRequest(messages) {
-  const data = await callProxy(messages);
+  const data = ARTIFACT_MODE ? await callDirect(messages) : await callProxy(messages);
   const text = data.content
     .filter(b => b.type === 'text')
     .map(b => b.text)
