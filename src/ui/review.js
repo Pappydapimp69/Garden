@@ -25,12 +25,17 @@ export function initReview() {
   const cancelBtn  = $('reviewCancel');
   const moreBtn    = $('reviewMoreAngles');
   const addTagBtn  = $('reviewAddTag');
+  const prevBtn    = $('reviewPrev');
+  const progressEl = $('reviewProgress');
   const acceptBtn  = $('reviewAccept');
 
   let pendingTags      = [];
   let pendingDataUrl   = null;
   let pendingCaptureDate = null;
   let pendingFallbackDate = null;
+  // Wizard state: -1 = summary screen (all plants shown for final confirm);
+  //               0..pendingTags.length-1 = focused-review of a single plant.
+  let reviewIndex      = 0;
   let selectedTagId    = null;
   let phraseInterval   = null;
   let reidContext      = null;
@@ -43,6 +48,7 @@ export function initReview() {
     pendingCaptureDate = null;
     pendingFallbackDate = null;
     selectedTagId = null;
+    reviewIndex = 0;
     reidContext = null;
     imgEl.src = '';
   }
@@ -189,9 +195,9 @@ export function initReview() {
     dateInput.value = formatDatetimeLocal(capturedMs);
     dateInput.max = formatDatetimeLocal(Date.now());
 
-    renderMarkers();
-    renderList();
-    updateAcceptLabel();
+    // Start the wizard on the first plant; setReviewIndex calls renderMarkers/
+    // renderList/updateFooter for us.
+    setReviewIndex(pendingTags.length > 0 ? 0 : -1);
 
     const z = repo.zones.get(session.currentZoneId);
     logAction('photo_analyzed', { plant_count: pendingTags.length, zone_type: z ? z.type : null });
@@ -249,6 +255,9 @@ export function initReview() {
       hideTagRing();
       markerEl.classList.remove('arming');
       markerEl.classList.add('dragging');
+      // Focus the wizard on whichever plant is being dragged.
+      const idx = pendingTags.findIndex(x => x.id === t.id);
+      if (idx >= 0 && idx !== reviewIndex) setReviewIndex(idx);
       if (navigator.vibrate) navigator.vibrate(25);
     }, REVIEW_HOLD_MS);
   }
@@ -278,7 +287,12 @@ export function initReview() {
     if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
     hideTagRing();
     markerEl.classList.remove('arming', 'dragging');
-    if (!wasDragging && pressTagId === t.id) selectTag(t.id);
+    // A quick tap jumps the wizard to this plant. A drag commits the new
+    // position and stays on whichever plant was being dragged.
+    if (!wasDragging && pressTagId === t.id) {
+      const idx = pendingTags.findIndex(x => x.id === t.id);
+      if (idx >= 0) setReviewIndex(idx);
+    }
     pressTagId = null; pressStart = null; dragMode = false;
   }
 
@@ -315,28 +329,62 @@ export function initReview() {
       displayNum: pendingTags.length + 1,
     };
     pendingTags.push(t);
-    selectedTagId = id;
-    renderMarkers();
-    renderList();
-    updateAcceptLabel();
+    setReviewIndex(pendingTags.length - 1);
     events.emit(EV.TOAST, { msg: 'Long-press the new tag to drag it onto the plant', kind: 'xp' });
   }
 
   function deleteTag(id) {
     pendingTags = pendingTags.filter(t => t.id !== id);
     pendingTags.forEach((t, i) => { t.displayNum = i + 1; });
-    if (selectedTagId === id) selectedTagId = null;
-    renderMarkers();
+    // Reindex displayNum and decide where the wizard cursor lands after deletion.
+    if (reviewIndex >= 0) {
+      if (reviewIndex >= pendingTags.length) reviewIndex = pendingTags.length - 1;
+      if (pendingTags.length === 0) reviewIndex = -1;
+    }
+    setReviewIndex(reviewIndex);
+  }
+
+  function setReviewIndex(i) {
+    if (pendingTags.length === 0) { reviewIndex = -1; }
+    else if (i >= pendingTags.length) { reviewIndex = -1; }
+    else if (i < -1) { reviewIndex = 0; }
+    else { reviewIndex = i; }
+    selectedTagId = (reviewIndex >= 0) ? pendingTags[reviewIndex].id : null;
+    // Update marker .selected classes in-place — avoid renderMarkers() because
+    // that destroys DOM nodes mid-drag and breaks pointer capture.
+    photoEl.querySelectorAll('.review-marker').forEach(m => {
+      m.classList.toggle('selected', m.dataset.id === selectedTagId);
+    });
     renderList();
-    updateAcceptLabel();
+    updateFooter();
+  }
+
+  function updateFooter() {
+    const inWizard = reviewIndex >= 0 && pendingTags.length > 0;
+    prevBtn.style.display    = inWizard ? '' : 'none';
+    progressEl.style.display = inWizard ? '' : 'none';
+    moreBtn.style.display    = !inWizard ? '' : 'none';
+    addTagBtn.style.display  = !inWizard ? '' : 'none';
+    if (inWizard) {
+      prevBtn.disabled = reviewIndex === 0;
+      prevBtn.style.opacity = reviewIndex === 0 ? '0.4' : '1';
+      progressEl.textContent = `${reviewIndex + 1} of ${pendingTags.length}`;
+      const isLast = reviewIndex === pendingTags.length - 1;
+      acceptBtn.textContent = isLast ? 'Review →' : 'Next →';
+    } else {
+      const accepted = pendingTags.filter(t => t.accepted && !t.pending).length;
+      const flagged  = pendingTags.filter(t => !t.accepted || t.pending).length;
+      acceptBtn.textContent = flagged > 0 ? `Identify ${flagged} & Accept` : `Accept ${accepted}`;
+    }
   }
 
   function renderList() {
     if (pendingTags.length === 0) {
-      listEl.innerHTML = `<div class="review-list-empty">No plants identified.<br>Try another angle or accept to manually tag.</div>`;
+      listEl.innerHTML = `<div class="review-list-empty">No plants identified.<br>Use + Tag to mark plants yourself, or accept to skip.</div>`;
       return;
     }
-    listEl.innerHTML = pendingTags.map(t => {
+    const tagsToRender = reviewIndex >= 0 ? [pendingTags[reviewIndex]] : pendingTags;
+    listEl.innerHTML = tagsToRender.map(t => {
       const conf = Math.round((t.confidence || 0) * 100);
       const cls = conf >= 75 ? 'high' : conf >= 45 ? 'med' : 'low';
       return `
@@ -380,13 +428,9 @@ export function initReview() {
   }
 
   function selectTag(id) {
-    selectedTagId = (selectedTagId === id) ? null : id;
-    renderMarkers();
-    renderList();
-    if (selectedTagId) {
-      const el = listEl.querySelector(`.review-item[data-id="${selectedTagId}"]`);
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    // Tapping a row in the summary jumps the wizard to that plant.
+    const idx = pendingTags.findIndex(t => t.id === id);
+    if (idx >= 0) setReviewIndex(idx);
   }
 
   function startNameEdit(id, itemEl) {
@@ -424,7 +468,7 @@ export function initReview() {
 
     renderMarkers();
     renderList();
-    updateAcceptLabel();
+    updateFooter();
   }
 
   function toggleReject(id) {
@@ -433,20 +477,9 @@ export function initReview() {
     t.accepted = !t.accepted;
     renderMarkers();
     renderList();
-    updateAcceptLabel();
+    updateFooter();
   }
 
-  function updateAcceptLabel() {
-    const accepted = pendingTags.filter(t => t.accepted).length;
-    const rejected = pendingTags.filter(t => !t.accepted).length;
-    if (rejected > 0) {
-      acceptBtn.textContent = `Retry ${rejected} →`;
-      acceptBtn.title = `${accepted} accepted, ${rejected} flagged for re-ID`;
-    } else {
-      acceptBtn.textContent = accepted === 0 ? 'Accept' : `Accept ${accepted}`;
-      acceptBtn.title = '';
-    }
-  }
 
   // ── Commit accepted tags as plants + journal entry ───────────────
   function commitTagsToZone(zoneId, accepted) {
@@ -726,11 +759,22 @@ export function initReview() {
 
   addTagBtn.addEventListener('click', () => addPendingMarker());
 
+  prevBtn.addEventListener('click', () => {
+    if (reviewIndex > 0) setReviewIndex(reviewIndex - 1);
+  });
+
   acceptBtn.addEventListener('click', async () => {
     // When in re-ID mode, acceptBtn.onclick is set above. This default handler
     // only runs for the first review pass.
     if (acceptBtn.onclick) return;
     if (!session.currentZoneId || !pendingDataUrl) return;
+
+    // Wizard: advance to next plant, or to summary when past the last one.
+    if (reviewIndex >= 0) {
+      const isLast = reviewIndex === pendingTags.length - 1;
+      setReviewIndex(isLast ? -1 : reviewIndex + 1);
+      return;
+    }
 
     // Pending markers (user-added, no identification yet) go through the same
     // re-ID flow as user-rejected ones — they all need vision to identify them

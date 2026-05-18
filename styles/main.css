@@ -240,8 +240,9 @@ input, select, textarea { font-family:inherit; }
 .ri-act-btn:hover { border-color:rgba(168,216,120,0.4); background:rgba(168,216,120,0.05); }
 .ri-act-btn.danger:hover { border-color:rgba(192,57,43,0.5); background:rgba(192,57,43,0.1); color:#f88; }
 
-.review-footer { padding:10px 14px 14px; border-top:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; gap:8px; background:#0a140a; }
+.review-footer { padding:10px 14px 14px; border-top:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; gap:8px; align-items:center; background:#0a140a; }
 .review-footer .btn { padding:11px; font-size:0.62rem; }
+.review-progress { flex:1; text-align:center; font-size:0.6rem; color:#7a8a6a; letter-spacing:0.1em; text-transform:uppercase; }
 
 .ri-name-edit { width:100%; background:#0a120a; border:1px solid #a8d878; color:#d4e8c2; padding:5px 7px; border-radius:3px; font-size:0.7rem; outline:none; font-family:inherit; }
 
