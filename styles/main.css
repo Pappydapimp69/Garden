@@ -191,9 +191,11 @@ input, select, textarea { font-family:inherit; }
 .review-conf.med  { background:#2a200a; color:#f39c12; }
 .review-conf.low  { background:#2a1e0a; color:#e67e22; }
 
-.review-photo { position:relative; flex-shrink:0; height:42vh; min-height:200px; background:#000; overflow:hidden; }
-.review-photo img { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; }
-.review-marker { position:absolute; transform:translate(-50%,-50%); cursor:pointer; z-index:5; }
+.review-photo { position:relative; flex-shrink:0; height:42vh; min-height:200px; background:#000; overflow:hidden; touch-action:none; }
+.review-photo img { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+.review-marker { position:absolute; transform:translate(-50%,-50%); cursor:pointer; z-index:5; touch-action:none; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+.review-marker.arming .dot { box-shadow:0 0 0 3px rgba(241,196,15,0.55), 0 0 14px rgba(241,196,15,0.6); }
+.review-marker.dragging .dot { transform:scale(1.45); box-shadow:0 0 0 4px #f1c40f, 0 0 22px rgba(241,196,15,0.85); }
 .review-marker .dot { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:0.55rem; border:2px solid rgba(255,255,255,0.7); box-shadow:0 0 8px rgba(0,0,0,0.8); transition:transform 0.15s; }
 .review-marker:hover .dot, .review-marker.selected .dot { transform:scale(1.35); }
 .review-marker.selected .dot { box-shadow:0 0 0 3px #f1c40f, 0 0 18px rgba(241,196,15,0.7); }

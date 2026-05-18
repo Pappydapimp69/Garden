@@ -198,31 +198,59 @@ export function initReview() {
   }
 
   // ── Marker press-then-drag (matches zone screen's tag-drag UX) ────
+  // Uses the same 120px tagRing element from index.html so the press progress
+  // is visible around the user's finger, not hidden under it.
+  const tagRing   = $('tagRing');
+  const tagRingFg = tagRing.querySelector('.fg');
+  const REVIEW_HOLD_MS = 600;  // shorter than zone (1200ms) — the review screen
+                                // has no pan/pinch competing for the same hold
+
   let pressTimer = null;
   let pressTagId = null;
   let pressStart = null;
   let dragMode   = false;
 
-  function clearPress() {
+  function showTagRing(x, y) {
+    tagRing.style.left = x + 'px';
+    tagRing.style.top  = y + 'px';
+    tagRingFg.style.transition = 'none';
+    tagRingFg.style.strokeDashoffset = '339';
+    tagRing.classList.add('active');
+    void tagRingFg.getBoundingClientRect();
+    tagRingFg.style.transition = `stroke-dashoffset ${REVIEW_HOLD_MS}ms linear`;
+    tagRingFg.style.strokeDashoffset = '0';
+  }
+  function hideTagRing() {
+    tagRing.classList.remove('active');
+    tagRingFg.style.transition = 'none';
+    tagRingFg.style.strokeDashoffset = '339';
+  }
+
+  function clearPress(markerEl) {
     if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    hideTagRing();
+    if (markerEl) markerEl.classList.remove('arming');
     pressTagId = null; pressStart = null; dragMode = false;
   }
 
   function markerPointerDown(t, markerEl, e) {
+    e.preventDefault();
     e.stopPropagation();
     clearPress();
     pressTagId = t.id;
     pressStart = { x: e.clientX, y: e.clientY };
-    markerEl.setPointerCapture(e.pointerId);
+    try { markerEl.setPointerCapture(e.pointerId); } catch (_) {}
     markerEl.classList.add('arming');
+    showTagRing(e.clientX, e.clientY);
     pressTimer = setTimeout(() => {
       pressTimer = null;
       if (pressTagId !== t.id) return;
       dragMode = true;
+      hideTagRing();
       markerEl.classList.remove('arming');
       markerEl.classList.add('dragging');
-      if (navigator.vibrate) navigator.vibrate(20);
-    }, TAG_HOLD_MS);
+      if (navigator.vibrate) navigator.vibrate(25);
+    }, REVIEW_HOLD_MS);
   }
 
   function markerPointerMove(t, markerEl, e) {
@@ -231,11 +259,11 @@ export function initReview() {
       const dx = e.clientX - pressStart.x;
       const dy = e.clientY - pressStart.y;
       if (Math.abs(dx) > TAG_MOVE_THRESH || Math.abs(dy) > TAG_MOVE_THRESH) {
-        markerEl.classList.remove('arming');
-        clearPress();
+        clearPress(markerEl);
       }
       return;
     }
+    e.preventDefault();
     const rect = photoEl.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width)  * 100;
     const y = ((e.clientY - rect.top)  / rect.height) * 100;
@@ -247,11 +275,16 @@ export function initReview() {
 
   function markerPointerUp(t, markerEl) {
     const wasDragging = dragMode;
-    markerEl.classList.remove('arming', 'dragging');
     if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    hideTagRing();
+    markerEl.classList.remove('arming', 'dragging');
     if (!wasDragging && pressTagId === t.id) selectTag(t.id);
     pressTagId = null; pressStart = null; dragMode = false;
   }
+
+  // Block the mobile browser's long-press image-save / context-menu while
+  // we're driving our own hold gesture inside the review photo.
+  photoEl.addEventListener('contextmenu', e => e.preventDefault());
 
   function renderMarkers() {
     photoEl.querySelectorAll('.review-marker').forEach(m => m.remove());
