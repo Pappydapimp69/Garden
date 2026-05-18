@@ -2,7 +2,7 @@ import { $, escapeHtml as esc } from './dom.js';
 import { repo } from '../data/repo.js';
 import { events, EV, session } from '../state/session.js';
 import { awardXP } from '../state/xp.js';
-import { CONF_HIGH, CONF_MED } from '../config.js';
+import { CONF_HIGH, CONF_MED, TAG_HOLD_MS, TAG_MOVE_THRESH } from '../config.js';
 import { processUpload, cropFromImage } from '../image/process.js';
 import { analyzeFullPhoto } from '../vision/analyze.js';
 import { reIdentifyBatch } from '../vision/reidentify.js';
@@ -24,6 +24,7 @@ export function initReview() {
   const footerEl   = $('reviewFooter');
   const cancelBtn  = $('reviewCancel');
   const moreBtn    = $('reviewMoreAngles');
+  const addTagBtn  = $('reviewAddTag');
   const acceptBtn  = $('reviewAccept');
 
   let pendingTags      = [];
@@ -196,20 +197,105 @@ export function initReview() {
     logAction('photo_analyzed', { plant_count: pendingTags.length, zone_type: z ? z.type : null });
   }
 
+  // ── Marker press-then-drag (matches zone screen's tag-drag UX) ────
+  let pressTimer = null;
+  let pressTagId = null;
+  let pressStart = null;
+  let dragMode   = false;
+
+  function clearPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    pressTagId = null; pressStart = null; dragMode = false;
+  }
+
+  function markerPointerDown(t, markerEl, e) {
+    e.stopPropagation();
+    clearPress();
+    pressTagId = t.id;
+    pressStart = { x: e.clientX, y: e.clientY };
+    markerEl.setPointerCapture(e.pointerId);
+    markerEl.classList.add('arming');
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      if (pressTagId !== t.id) return;
+      dragMode = true;
+      markerEl.classList.remove('arming');
+      markerEl.classList.add('dragging');
+      if (navigator.vibrate) navigator.vibrate(20);
+    }, TAG_HOLD_MS);
+  }
+
+  function markerPointerMove(t, markerEl, e) {
+    if (pressTagId !== t.id) return;
+    if (!dragMode) {
+      const dx = e.clientX - pressStart.x;
+      const dy = e.clientY - pressStart.y;
+      if (Math.abs(dx) > TAG_MOVE_THRESH || Math.abs(dy) > TAG_MOVE_THRESH) {
+        markerEl.classList.remove('arming');
+        clearPress();
+      }
+      return;
+    }
+    const rect = photoEl.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width)  * 100;
+    const y = ((e.clientY - rect.top)  / rect.height) * 100;
+    t.x = Math.max(0, Math.min(100, x));
+    t.y = Math.max(0, Math.min(100, y));
+    markerEl.style.left = t.x + '%';
+    markerEl.style.top  = t.y + '%';
+  }
+
+  function markerPointerUp(t, markerEl) {
+    const wasDragging = dragMode;
+    markerEl.classList.remove('arming', 'dragging');
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    if (!wasDragging && pressTagId === t.id) selectTag(t.id);
+    pressTagId = null; pressStart = null; dragMode = false;
+  }
+
   function renderMarkers() {
     photoEl.querySelectorAll('.review-marker').forEach(m => m.remove());
     pendingTags.forEach(t => {
       const m = document.createElement('div');
       m.className = `review-marker ${t.category || 'unknown'}`
         + (t.accepted ? '' : ' rejected')
+        + (t.pending ? ' pending' : '')
         + (selectedTagId === t.id ? ' selected' : '');
       m.dataset.id = t.id;
       m.style.left = t.x + '%';
       m.style.top  = t.y + '%';
-      m.innerHTML = `<div class="dot">${t.displayNum}</div>`;
-      m.addEventListener('click', (e) => { e.stopPropagation(); selectTag(t.id); });
+      m.innerHTML  = `<div class="dot">${t.pending ? '?' : t.displayNum}</div>`;
+      m.addEventListener('pointerdown', e => markerPointerDown(t, m, e));
+      m.addEventListener('pointermove', e => markerPointerMove(t, m, e));
+      m.addEventListener('pointerup',   () => markerPointerUp(t, m));
+      m.addEventListener('pointercancel', () => markerPointerUp(t, m));
       photoEl.appendChild(m);
     });
+  }
+
+  function addPendingMarker() {
+    const id = repo.newId('t');
+    const t = {
+      id, accepted: true, pending: true, name: 'Unidentified',
+      category: 'unknown', confidence: null,
+      x: 50, y: 50,
+      displayNum: pendingTags.length + 1,
+    };
+    pendingTags.push(t);
+    selectedTagId = id;
+    renderMarkers();
+    renderList();
+    updateAcceptLabel();
+    events.emit(EV.TOAST, { msg: 'Long-press the new tag to drag it onto the plant', kind: 'xp' });
+  }
+
+  function deleteTag(id) {
+    pendingTags = pendingTags.filter(t => t.id !== id);
+    pendingTags.forEach((t, i) => { t.displayNum = i + 1; });
+    if (selectedTagId === id) selectedTagId = null;
+    renderMarkers();
+    renderList();
+    updateAcceptLabel();
   }
 
   function renderList() {
@@ -232,6 +318,7 @@ export function initReview() {
             <div class="ri-actions">
               <button class="ri-act-btn" data-act="cycle" title="Change category">${categoryEmoji(t.category)}</button>
               <button class="ri-act-btn danger" data-act="reject" title="${t.accepted ? 'Reject — will retry with closer crop' : 'Restore'}">${t.accepted ? '👎' : '↩'}</button>
+              <button class="ri-act-btn danger" data-act="delete" title="Delete tag">✕</button>
             </div>
           </div>
         </div>
@@ -252,6 +339,9 @@ export function initReview() {
       });
       el.querySelector('[data-act="reject"]').addEventListener('click', (e) => {
         e.stopPropagation(); toggleReject(id);
+      });
+      el.querySelector('[data-act="delete"]').addEventListener('click', (e) => {
+        e.stopPropagation(); deleteTag(id);
       });
     });
   }
@@ -601,19 +691,25 @@ export function initReview() {
   // change handler will reopen processing once a file is picked.
   moreBtn.addEventListener('click', () => { close(); });
 
+  addTagBtn.addEventListener('click', () => addPendingMarker());
+
   acceptBtn.addEventListener('click', async () => {
     // When in re-ID mode, acceptBtn.onclick is set above. This default handler
     // only runs for the first review pass.
     if (acceptBtn.onclick) return;
     if (!session.currentZoneId || !pendingDataUrl) return;
 
-    const accepted = pendingTags.filter(t => t.accepted);
+    // Pending markers (user-added, no identification yet) go through the same
+    // re-ID flow as user-rejected ones — they all need vision to identify them
+    // from the current marker position. Batches both into a single API call.
+    const pending  = pendingTags.filter(t =>  t.pending && t.accepted);
     const rejected = pendingTags.filter(t => !t.accepted);
+    const accepted = pendingTags.filter(t =>  t.accepted && !t.pending);
 
     rejected.forEach(() => logAction('plant_rejected', { zone_id: session.currentZoneId }));
 
-    if (rejected.length > 0) {
-      await startReIDFlow(session.currentZoneId, accepted, rejected);
+    if (rejected.length > 0 || pending.length > 0) {
+      await startReIDFlow(session.currentZoneId, accepted, [...rejected, ...pending]);
     } else {
       commitTagsToZone(session.currentZoneId, accepted);
     }
