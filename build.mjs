@@ -120,8 +120,11 @@ function minifyCSS(css) {
 const html = readFileSync(resolve(ROOT, HTML_IN), 'utf8');
 const css  = readFileSync(resolve(ROOT, CSS_IN),  'utf8');
 const finalCSS = ARTIFACT_MODE ? minifyCSS(css) : css;
+const finalHTML = ARTIFACT_MODE
+  ? html.replace(/<!--[\s\S]*?-->/g, '').replace(/^\s*\n/gm, '')
+  : html;
 
-const inlined = html
+const inlined = finalHTML
   .replace(
     /<link\s+rel="stylesheet"\s+href="\.\/styles\/main\.css"\s*>/,
     `<style>${finalCSS}</style>`,
