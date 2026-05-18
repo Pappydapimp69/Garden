@@ -20,6 +20,13 @@ export const MAX_IMAGE_DIM = 1600;
 export const IMAGE_QUALITY = 0.82;
 export const REID_CROP_PCT = 25;
 
+// Build mode. Rewritten to `true` by build.mjs --artifact. Artifact builds
+// (for the Claude.ai sandbox) bypass both BYOK and the proxy and call
+// api.anthropic.com with no key — Claude.ai's sandbox proxies the request
+// at no cost, so the project owner can iterate without burning API credits.
+// Production builds (Pages) keep this false and use the BYOK/proxy paths.
+export const ARTIFACT_MODE     = false;
+
 // Vision model + endpoint. The direct endpoint is used only when the user has
 // supplied their own Anthropic key (BYOK); otherwise the app routes through
 // VISION_PROXY_URL which holds our key server-side and enforces the quota.

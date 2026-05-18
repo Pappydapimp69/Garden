@@ -259,6 +259,13 @@ const MAX_IMAGE_DIM = 1600;
 const IMAGE_QUALITY = 0.82;
 const REID_CROP_PCT = 25;
 
+// Build mode. Rewritten to `true` by build.mjs --artifact. Artifact builds
+// (for the Claude.ai sandbox) bypass both BYOK and the proxy and call
+// api.anthropic.com with no key — Claude.ai's sandbox proxies the request
+// at no cost, so the project owner can iterate without burning API credits.
+// Production builds (Pages) keep this false and use the BYOK/proxy paths.
+const ARTIFACT_MODE     = true;
+
 // Vision model + endpoint. The direct endpoint is used only when the user has
 // supplied their own Anthropic key (BYOK); otherwise the app routes through
 // VISION_PROXY_URL which holds our key server-side and enforces the quota.
@@ -293,6 +300,7 @@ const VISION_PROXY_URL  = SUPABASE_URL + '/functions/v1/vision-proxy';
   __mods["src/config.js"].MAX_IMAGE_DIM = MAX_IMAGE_DIM;
   __mods["src/config.js"].IMAGE_QUALITY = IMAGE_QUALITY;
   __mods["src/config.js"].REID_CROP_PCT = REID_CROP_PCT;
+  __mods["src/config.js"].ARTIFACT_MODE = ARTIFACT_MODE;
   __mods["src/config.js"].VISION_MODEL = VISION_MODEL;
   __mods["src/config.js"].VISION_ENDPOINT = VISION_ENDPOINT;
   __mods["src/config.js"].VISION_MAX_TOKENS = VISION_MAX_TOKENS;
@@ -2489,7 +2497,7 @@ function promptApiPassword({ title = 'Unlock API Key', sub = 'Enter the password
 // ── src/vision/client.js ──
 {
   __mods["src/vision/client.js"] = {};
-  const { VISION_MODEL, VISION_ENDPOINT, VISION_MAX_TOKENS, VISION_PROXY_URL, SUPABASE_ANON_KEY } = __mods["src/config.js"];
+  const { ARTIFACT_MODE, VISION_MODEL, VISION_ENDPOINT, VISION_MAX_TOKENS, VISION_PROXY_URL, SUPABASE_ANON_KEY } = __mods["src/config.js"];
   const { getSession } = __mods["src/auth/authManager.js"];
   const { hasApiKey, getApiKey } = __mods["src/auth/apiKey.js"];
   const { events, EV } = __mods["src/state/session.js"];
@@ -2535,6 +2543,22 @@ function parseAnthropic(data) {
     .replace(/```json|```/g, '')
     .trim();
   return JSON.parse(text);
+}
+
+// Artifact-build path: direct call with no auth headers. Only succeeds inside
+// the Claude.ai artifact sandbox, which proxies the request to Anthropic at no
+// cost. Lets the owner beta-test inside Claude.ai without spending credits.
+async function _callSandbox(messages) {
+  const resp = await fetch(VISION_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload(messages),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error('Vision API ' + resp.status + (txt ? ': ' + txt.slice(0, 200) : ''));
+  }
+  return parseAnthropic(await resp.json());
 }
 
 async function _callBYOK(messages) {
@@ -2586,6 +2610,7 @@ async function _callProxy(messages) {
 }
 
 async function visionRequest(messages) {
+  if (ARTIFACT_MODE) return _callSandbox(messages);
   if (hasApiKey()) {
     const result = await _callBYOK(messages);
     logAction('vision_byok_call', {});

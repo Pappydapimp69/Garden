@@ -6,7 +6,7 @@
 //      Supabase JWT. The edge function enforces the per-user quota
 //      (10/day UTC, 100/lifetime) and forwards using our server-side key.
 
-import { VISION_MODEL, VISION_ENDPOINT, VISION_MAX_TOKENS, VISION_PROXY_URL, SUPABASE_ANON_KEY } from '../config.js';
+import { ARTIFACT_MODE, VISION_MODEL, VISION_ENDPOINT, VISION_MAX_TOKENS, VISION_PROXY_URL, SUPABASE_ANON_KEY } from '../config.js';
 import { getSession } from '../auth/authManager.js';
 import { hasApiKey, getApiKey } from '../auth/apiKey.js';
 import { events, EV } from '../state/session.js';
@@ -39,6 +39,22 @@ function parseAnthropic(data) {
     .replace(/```json|```/g, '')
     .trim();
   return JSON.parse(text);
+}
+
+// Artifact-build path: direct call with no auth headers. Only succeeds inside
+// the Claude.ai artifact sandbox, which proxies the request to Anthropic at no
+// cost. Lets the owner beta-test inside Claude.ai without spending credits.
+async function _callSandbox(messages) {
+  const resp = await fetch(VISION_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload(messages),
+  });
+  if (!resp.ok) {
+    const txt = await resp.text().catch(() => '');
+    throw new Error('Vision API ' + resp.status + (txt ? ': ' + txt.slice(0, 200) : ''));
+  }
+  return parseAnthropic(await resp.json());
 }
 
 async function _callBYOK(messages) {
@@ -90,6 +106,7 @@ async function _callProxy(messages) {
 }
 
 export async function visionRequest(messages) {
+  if (ARTIFACT_MODE) return _callSandbox(messages);
   if (hasApiKey()) {
     const result = await _callBYOK(messages);
     logAction('vision_byok_call', {});
