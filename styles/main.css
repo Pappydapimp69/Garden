@@ -35,7 +35,7 @@ input, select, textarea { font-family:inherit; }
 .zone-card-stats span strong { color:#a8c298; }
 .zone-thumb { width:100%; height:140px; object-fit:cover; border-radius:6px; margin-top:8px; background:#000; }
 
-.fab { position:fixed; bottom:20px; right:20px; width:56px; height:56px; border-radius:50%; background:#27ae60; color:#fff; border:none; font-size:1.6rem; box-shadow:0 6px 20px rgba(39,174,96,0.4); z-index:100; transition:transform 0.15s; touch-action:manipulation; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.fab { position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); right:calc(20px + env(safe-area-inset-right)); width:56px; height:56px; border-radius:50%; background:#27ae60; color:#fff; border:none; font-size:1.6rem; box-shadow:0 6px 20px rgba(39,174,96,0.4); z-index:100; transition:transform 0.15s; touch-action:manipulation; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .fab:active { transform:scale(0.92); }
 
 /* Hidden file inputs are off-screen, not display:none, so sandboxed iframes
@@ -156,7 +156,7 @@ input, select, textarea { font-family:inherit; }
 .crop-preview { width:100%; max-height:140px; object-fit:contain; border:1px solid #2a4a1a; border-radius:3px; background:#000; margin-bottom:10px; }
 
 /* ── Care panel (bottom sheet) ─────────────────────────────────────── */
-.care-panel { position:fixed; bottom:0; left:0; right:0; z-index:150; background:rgba(8,18,8,0.97); backdrop-filter:blur(16px); border-top:1px solid rgba(58,106,42,0.6); border-radius:16px 16px 0 0; box-shadow:0 -8px 40px rgba(0,0,0,0.7); transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.32,0.72,0,1); max-height:72vh; display:flex; flex-direction:column; }
+.care-panel { position:fixed; bottom:0; left:0; right:0; z-index:150; background:rgba(8,18,8,0.97); backdrop-filter:blur(16px); border-top:1px solid rgba(58,106,42,0.6); border-radius:16px 16px 0 0; box-shadow:0 -8px 40px rgba(0,0,0,0.7); transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.32,0.72,0,1); max-height:72vh; display:flex; flex-direction:column; padding-bottom:env(safe-area-inset-bottom); }
 .care-panel.open { transform:translateY(0); }
 .care-handle { width:36px; height:4px; background:rgba(168,216,120,0.3); border-radius:2px; margin:12px auto 0; flex-shrink:0; }
 .care-header { display:flex; align-items:flex-start; justify-content:space-between; padding:12px 18px 10px; border-bottom:1px solid rgba(58,106,42,0.3); }
@@ -183,7 +183,7 @@ input, select, textarea { font-family:inherit; }
 /* ── Review screen (AI tag confirmation) ──────────────────────────── */
 .review-screen { position:fixed; inset:0; z-index:180; background:#0a120a; display:none; flex-direction:column; }
 .review-screen.active { display:flex; }
-.review-header { padding:12px 14px 10px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.review-header { padding:calc(12px + env(safe-area-inset-top)) 14px 10px; border-bottom:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
 .review-header h2 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1rem; }
 .review-header .sub { font-size:0.5rem; color:#5a7a4a; letter-spacing:0.15em; text-transform:uppercase; margin-top:2px; }
 .review-conf { padding:4px 10px; border-radius:14px; font-size:0.55rem; font-weight:700; letter-spacing:0.05em; flex-shrink:0; }
@@ -240,7 +240,7 @@ input, select, textarea { font-family:inherit; }
 .ri-act-btn:hover { border-color:rgba(168,216,120,0.4); background:rgba(168,216,120,0.05); }
 .ri-act-btn.danger:hover { border-color:rgba(192,57,43,0.5); background:rgba(192,57,43,0.1); color:#f88; }
 
-.review-footer { padding:10px 14px 14px; border-top:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; gap:8px; align-items:center; background:#0a140a; }
+.review-footer { padding:10px 14px calc(14px + env(safe-area-inset-bottom)); border-top:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; gap:8px; align-items:center; background:#0a140a; }
 .review-footer .btn { padding:11px; font-size:0.62rem; }
 .review-progress { flex:1; text-align:center; font-size:0.6rem; color:#7a8a6a; letter-spacing:0.1em; text-transform:uppercase; }
 
