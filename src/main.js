@@ -18,6 +18,7 @@ import { logAction } from './data/actionsLog.js';
 import { initProfileMenu } from './ui/profileMenu.js';
 import { initSettings } from './ui/settings.js';
 import { lockSession } from './auth/apiKey.js';
+import { ARTIFACT_MODE } from './config.js';
 
 // Toast must be active before anything can emit EV.TOAST (including auth errors).
 initToast();
@@ -25,15 +26,20 @@ initToast();
 (async () => {
   let authUI;
 
-  async function startApp(authSession) {
+  async function startApp(authSession, { guest = false } = {}) {
     session.currentUser = { user_id: authSession.user_id, email: authSession.email };
 
-    // Seed in-memory store from Supabase and swap the backend.
-    try {
-      await activateSupabase(authSession);
-    } catch (e) {
-      events.emit(EV.TOAST, { msg: 'Failed to load your data: ' + (e.message || e), kind: 'error' });
-      console.error('activateSupabase failed:', e);
+    // Guest/demo mode (artifact builds) runs entirely on the local store — no
+    // Supabase seed, no network — so the app is usable without a login. The
+    // Supabase backend is only activated for a real authenticated session.
+    if (!guest) {
+      // Seed in-memory store from Supabase and swap the backend.
+      try {
+        await activateSupabase(authSession);
+      } catch (e) {
+        events.emit(EV.TOAST, { msg: 'Failed to load your data: ' + (e.message || e), kind: 'error' });
+        console.error('activateSupabase failed:', e);
+      }
     }
 
     // ── UI init ────────────────────────────────────────────────────────────
@@ -158,10 +164,18 @@ initToast();
   // ── Auth init ────────────────────────────────────────────────────────────
   authUI = initAuthUI({ onLogin: (s) => startApp(s) });
 
-  const existingSession = await initAuth();
-  if (existingSession) {
-    await startApp(existingSession);
+  // Artifact/demo builds skip the auth gate entirely and boot straight into a
+  // local guest session — the whole point of an artifact build is to be tried
+  // without a backend. Production (Pages) builds keep ARTIFACT_MODE=false and
+  // require a real login below.
+  if (ARTIFACT_MODE) {
+    await startApp({ user_id: 'local-guest', email: 'guest@local' }, { guest: true });
   } else {
-    authUI.show();
+    const existingSession = await initAuth();
+    if (existingSession) {
+      await startApp(existingSession);
+    } else {
+      authUI.show();
+    }
   }
 })();
