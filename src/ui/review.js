@@ -36,6 +36,12 @@ export function initReview() {
   // Wizard state: -1 = summary screen (all plants shown for final confirm);
   //               0..pendingTags.length-1 = focused-review of a single plant.
   let reviewIndex      = 0;
+  // High-water mark of the furthest step reached. The step indicator lets the
+  // user jump BACK to any already-seen step for free, but never FORWARD past an
+  // unvisited one (UX kernel: back-free-forward-blocked). Direct-manipulation
+  // marker/row taps stay unrestricted — they're an editing surface, not wizard
+  // navigation — and simply advance this mark as a side effect.
+  let maxVisitedIndex  = 0;
   let selectedTagId    = null;
   let phraseInterval   = null;
   let reidContext      = null;
@@ -49,6 +55,7 @@ export function initReview() {
     pendingFallbackDate = null;
     selectedTagId = null;
     reviewIndex = 0;
+    maxVisitedIndex = 0;
     reidContext = null;
     imgEl.src = '';
   }
@@ -197,6 +204,7 @@ export function initReview() {
 
     // Start the wizard on the first plant; setReviewIndex calls renderMarkers/
     // renderList/updateFooter for us.
+    maxVisitedIndex = 0;
     setReviewIndex(pendingTags.length > 0 ? 0 : -1);
 
     const z = repo.zones.get(session.currentZoneId);
@@ -349,6 +357,10 @@ export function initReview() {
     else if (i >= pendingTags.length) { reviewIndex = -1; }
     else if (i < -1) { reviewIndex = 0; }
     else { reviewIndex = i; }
+    if (reviewIndex >= 0) {
+      maxVisitedIndex = Math.max(maxVisitedIndex, reviewIndex);
+    }
+    maxVisitedIndex = Math.min(maxVisitedIndex, Math.max(0, pendingTags.length - 1));
     selectedTagId = (reviewIndex >= 0) ? pendingTags[reviewIndex].id : null;
     // Update marker .selected classes in-place — avoid renderMarkers() because
     // that destroys DOM nodes mid-drag and breaks pointer capture.
@@ -368,7 +380,7 @@ export function initReview() {
     if (inWizard) {
       prevBtn.disabled = reviewIndex === 0;
       prevBtn.style.opacity = reviewIndex === 0 ? '0.4' : '1';
-      progressEl.textContent = `${reviewIndex + 1} of ${pendingTags.length}`;
+      renderStepIndicator();
       const isLast = reviewIndex === pendingTags.length - 1;
       acceptBtn.textContent = isLast ? 'Review →' : 'Next →';
     } else {
@@ -376,6 +388,37 @@ export function initReview() {
       const flagged  = pendingTags.filter(t => !t.accepted || t.pending).length;
       acceptBtn.textContent = flagged > 0 ? `Identify ${flagged} & Accept` : `Accept ${accepted}`;
     }
+  }
+
+  // Segmented, clickable step indicator for the single-plant wizard.
+  // Goal-gradient: show a labeled, filled-from-step-one indicator (never a bar
+  // that reads as empty/zero) so remaining work is legible and early progress
+  // feels earned. Back-free-forward-blocked: any already-seen segment jumps
+  // straight back to it; segments past the high-water mark are locked.
+  function renderStepIndicator() {
+    const n = pendingTags.length;
+    const segs = pendingTags.map((t, idx) => {
+      const seen    = idx <= maxVisitedIndex;
+      const cls = idx === reviewIndex ? 'current'
+                : idx <  reviewIndex  ? 'done'
+                : seen                ? 'seen'
+                : 'locked';
+      const label = seen
+        ? `Go back to plant ${idx + 1}`
+        : `Plant ${idx + 1} — not reviewed yet`;
+      return `<button type="button" class="review-step ${cls}" data-step="${idx}"`
+           + `${seen ? '' : ' disabled'} aria-label="${label}" title="${label}"></button>`;
+    }).join('');
+    progressEl.innerHTML =
+      `<span class="review-step-label">Plant ${reviewIndex + 1} of ${n}</span>`
+      + `<span class="review-step-track">${segs}</span>`;
+    progressEl.querySelectorAll('.review-step').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.step, 10);
+        // Forward-block: only jump to steps already seen.
+        if (idx <= maxVisitedIndex) setReviewIndex(idx);
+      });
+    });
   }
 
   function renderList() {
