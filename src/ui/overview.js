@@ -3,6 +3,9 @@ import { repo } from '../data/repo.js';
 import { events, EV } from '../state/session.js';
 import { awardXP } from '../state/xp.js';
 import { xpForLevel } from '../state/xp.js';
+import { generateInsight } from '../state/insights.js';
+
+const INSIGHT_KEY = 'garden_last_insight';
 
 export function initOverview({ onZoneOpen, onUploadForNewZone, onDevCreateZone }) {
   const zoneList   = $('zoneList');
@@ -10,6 +13,7 @@ export function initOverview({ onZoneOpen, onUploadForNewZone, onDevCreateZone }
   const levelValue = $('levelValue');
   const xpFill     = $('xpFill');
   const zoneCountLabel = $('zoneCountLabel');
+  const insightEl  = $('gardenInsight');
 
   function renderLevel() {
     const { xp, level } = repo.progress.get();
@@ -20,6 +24,37 @@ export function initOverview({ onZoneOpen, onUploadForNewZone, onDevCreateZone }
 
   function plantCount(z) { return repo.plants.listByZone(z.id).length; }
   function journalCount(z) { return repo.journal.listByZone(z.id).length; }
+
+  // Longitudinal "we noticed…" card. The engine stays silent unless it finds a
+  // specific, confidence-cleared pattern across a zone's history, and never
+  // repeats the last insight (persisted key). Never throws — a bad read just
+  // leaves the card hidden.
+  function renderInsight() {
+    try {
+      const zoneName = new Map(repo.zones.list().map(z => [z.id, z.name]));
+      const entries = [];
+      for (const z of repo.zones.list()) {
+        for (const j of repo.journal.listByZone(z.id)) {
+          entries.push({ zone_id: z.id, zone_name: zoneName.get(z.id),
+                         entry_date: j.entry_date, plant_count: j.plant_count });
+        }
+      }
+      let lastKey = null;
+      try { lastKey = localStorage.getItem(INSIGHT_KEY); } catch {}
+      const ins = generateInsight(entries, { now: Date.now(), lastKey });
+      if (!ins) { insightEl.style.display = 'none'; insightEl.innerHTML = ''; return; }
+      insightEl.innerHTML =
+        `<span class="gi-icon">💡</span>`
+        + `<span class="gi-text">${esc(ins.text)}</span>`
+        + `<button class="gi-dismiss" title="Dismiss" aria-label="Dismiss">✕</button>`;
+      insightEl.style.display = '';
+      insightEl.querySelector('.gi-dismiss').addEventListener('click', () => {
+        // Dismiss = don't show THIS insight again; remember it as the last one.
+        try { localStorage.setItem(INSIGHT_KEY, ins.key); } catch {}
+        insightEl.style.display = 'none';
+      });
+    } catch { insightEl.style.display = 'none'; }
+  }
 
   function renderZoneList() {
     const zones = repo.zones.list();
@@ -50,6 +85,8 @@ export function initOverview({ onZoneOpen, onUploadForNewZone, onDevCreateZone }
     zoneList.querySelectorAll('.zone-card').forEach(el => {
       el.addEventListener('click', () => onZoneOpen(el.dataset.id));
     });
+
+    renderInsight();
   }
 
   // FAB is a <label for="photoInputNewZone">. The browser opens the file
