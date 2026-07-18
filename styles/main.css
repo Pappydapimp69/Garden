@@ -21,6 +21,15 @@ input, select, textarea { font-family:inherit; }
 .xp-fill { height:100%; background:#a8d878; transition:width 0.3s; }
 
 .zone-list { flex:1; overflow-y:auto; padding:14px 16px 80px; }
+.garden-insight { display:flex; align-items:center; gap:9px; margin:12px 16px 0;
+  padding:10px 12px; border-radius:8px; font-size:0.66rem; line-height:1.5; color:#d9e8c6;
+  background:linear-gradient(180deg,rgba(90,140,60,0.18),rgba(58,106,42,0.12));
+  border:1px solid rgba(120,180,90,0.35); }
+.garden-insight .gi-icon { font-size:0.9rem; flex-shrink:0; }
+.garden-insight .gi-text { flex:1; }
+.garden-insight .gi-dismiss { flex-shrink:0; background:none; border:0; color:#7a8a6a;
+  font-size:0.8rem; cursor:pointer; padding:2px 4px; line-height:1; }
+.garden-insight .gi-dismiss:hover { color:#d4e8c2; }
 .zone-empty { text-align:center; padding:60px 20px; color:#5a7a4a; }
 .zone-empty h2 { font-family:'Playfair Display',serif; color:#a8d878; font-size:1.1rem; margin-bottom:8px; }
 .zone-empty p { font-size:0.7rem; line-height:1.6; max-width:280px; margin:0 auto; }
@@ -125,6 +134,9 @@ input, select, textarea { font-family:inherit; }
 .dialog input, .dialog select, .dialog textarea { width:100%; background:#0a120a; border:1px solid #3a6a2a; color:#d4e8c2; padding:8px 10px; border-radius:4px; font-size:0.7rem; outline:none; }
 .dialog textarea { min-height:60px; resize:vertical; }
 .dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color:#a8d878; }
+.plant-community { margin-top:12px; padding:8px 10px; border-radius:4px; font-size:0.62rem;
+  line-height:1.5; color:#9ab27f; background:rgba(58,106,42,0.14); border:1px solid rgba(58,106,42,0.35); }
+.plant-community.caution { color:#c9b06a; background:rgba(120,100,40,0.14); border-color:rgba(120,100,40,0.4); }
 .dialog-buttons { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
 .btn { flex:1; min-width:80px; padding:9px; border:none; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:700; letter-spacing:0.05em; text-align:center; display:inline-block; }
 .btn-confirm { background:#27ae60; color:#fff; }
@@ -242,7 +254,18 @@ input, select, textarea { font-family:inherit; }
 
 .review-footer { padding:10px 14px 14px; border-top:1px solid rgba(58,106,42,0.3); flex-shrink:0; display:flex; gap:8px; align-items:center; background:#0a140a; }
 .review-footer .btn { padding:11px; font-size:0.62rem; }
-.review-progress { flex:1; text-align:center; font-size:0.6rem; color:#7a8a6a; letter-spacing:0.1em; text-transform:uppercase; }
+.review-progress { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; }
+.review-step-label { font-size:0.6rem; color:#9ab27f; letter-spacing:0.1em; text-transform:uppercase; }
+.review-step-track { display:flex; gap:4px; width:100%; max-width:220px; justify-content:center; }
+/* One segment per plant. Filled from step one (never reads as empty/zero);
+   seen segments are tappable to jump back, locked segments are not. */
+.review-step { flex:1; height:6px; min-width:8px; padding:0; border:0; border-radius:3px;
+  background:rgba(122,138,106,0.28); cursor:pointer; transition:background 0.15s, transform 0.15s; }
+.review-step.done    { background:#3a6a2a; }
+.review-step.current { background:#8fd66a; transform:scaleY(1.6); box-shadow:0 0 6px rgba(143,214,106,0.5); }
+.review-step.seen    { background:#5a7a45; }
+.review-step.locked  { background:rgba(122,138,106,0.22); cursor:not-allowed; }
+.review-step:not(.locked):hover { background:#b6e894; }
 
 .ri-name-edit { width:100%; background:#0a120a; border:1px solid #a8d878; color:#d4e8c2; padding:5px 7px; border-radius:3px; font-size:0.7rem; outline:none; font-family:inherit; }
 

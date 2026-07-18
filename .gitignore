@@ -2,3 +2,6 @@ dist/
 node_modules/
 .DS_Store
 node_modules/
+
+# Brain cognitive-system local store (per-machine private mirror; not portable)
+.brain/

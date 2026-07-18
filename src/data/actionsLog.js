@@ -2,7 +2,10 @@ import { getSession } from '../auth/authManager.js';
 import { dbInsert } from '../auth/supabaseClient.js';
 
 // Fields allowed in the anonymized global log (no PII, no user-generated text).
-const GLOBAL_SAFE_FIELDS = ['plant_count', 'zone_type', 'confidence', 'category', 'amount'];
+// Kept in sync with the server-side whitelist in SCHEMA.sql's
+// sanitize_global_action_log() trigger, which re-enforces this in the DB — the
+// client copy just avoids sending fields the trigger would strip anyway.
+const GLOBAL_SAFE_FIELDS = ['plant_count', 'zone_type', 'confidence', 'category', 'amount', 'species_canonical'];
 
 function sanitizeForGlobal(payload) {
   const safe = {};
