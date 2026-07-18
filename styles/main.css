@@ -125,6 +125,9 @@ input, select, textarea { font-family:inherit; }
 .dialog input, .dialog select, .dialog textarea { width:100%; background:#0a120a; border:1px solid #3a6a2a; color:#d4e8c2; padding:8px 10px; border-radius:4px; font-size:0.7rem; outline:none; }
 .dialog textarea { min-height:60px; resize:vertical; }
 .dialog input:focus, .dialog select:focus, .dialog textarea:focus { border-color:#a8d878; }
+.plant-community { margin-top:12px; padding:8px 10px; border-radius:4px; font-size:0.62rem;
+  line-height:1.5; color:#9ab27f; background:rgba(58,106,42,0.14); border:1px solid rgba(58,106,42,0.35); }
+.plant-community.caution { color:#c9b06a; background:rgba(120,100,40,0.14); border-color:rgba(120,100,40,0.4); }
 .dialog-buttons { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
 .btn { flex:1; min-width:80px; padding:9px; border:none; border-radius:4px; font-size:0.6rem; cursor:pointer; font-weight:700; letter-spacing:0.05em; text-align:center; display:inline-block; }
 .btn-confirm { background:#27ae60; color:#fff; }

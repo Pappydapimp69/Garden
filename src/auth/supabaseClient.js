@@ -107,3 +107,14 @@ export async function dbDelete(table, filters) {
   });
   if (!r.ok) await _throw(r);
 }
+
+// Call a Postgres function exposed via PostgREST (/rpc/<fn>). Returns the
+// parsed JSON body, or null for a void/204 response.
+export async function dbRpc(fn, args) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST', headers: _headers(), body: JSON.stringify(args || {}),
+  });
+  if (!r.ok) await _throw(r);
+  const txt = await r.text();
+  return txt ? JSON.parse(txt) : null;
+}

@@ -19,6 +19,7 @@ export const repo = {
   get plants()  { return _backend.plants; },
   get journal() { return _backend.journal; },
   get progress(){ return _backend.progress; },
+  get community(){ return _backend.community; },
   newId: (...a) => _backend.newId(...a),
   save:  ()    => _backend.save(),
   raw:   ()    => _backend.raw(),

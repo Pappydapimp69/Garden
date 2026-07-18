@@ -1,4 +1,4 @@
-import { dbSelect, dbInsert, dbUpsert, dbUpdate, dbDelete } from '../auth/supabaseClient.js';
+import { dbSelect, dbInsert, dbUpsert, dbUpdate, dbDelete, dbRpc } from '../auth/supabaseClient.js';
 import { emptyDB, newId } from './schema.js';
 
 // Write-through in-memory repo backed by Supabase.
@@ -194,6 +194,24 @@ export async function createSupabaseRepo(session) {
         db.user.level = level;
         push(() => dbUpdate('user_profiles', { 'id': 'eq.' + uid }, { xp, level }));
       },
+    },
+
+    // Crowdsourced plant-network. record() contributes one anonymized
+    // observation (the RPC sources the zip + opt-in server-side, so opted-out
+    // users contribute nothing). insight() returns an honestly-framed aggregate
+    // for the caller's own area, or { enough:false } below the publish threshold.
+    community: {
+      record: (species, category, confidence) => {
+        if (!species) return;
+        push(() => dbRpc('record_species_observation', {
+          p_species: species, p_category: category || null,
+          p_confidence: confidence ?? null,
+        }));
+      },
+      insight: (species) => species
+        ? dbRpc('species_insight', { p_species: species })
+            .catch(() => ({ enough: false, sample: 0 }))
+        : Promise.resolve({ enough: false, sample: 0 }),
     },
   };
 }

@@ -550,6 +550,12 @@ export function initReview() {
         category: t.category || 'unknown',
         zone_type: z.type,
       });
+      // Contribute one anonymized observation to the plant-network (the RPC
+      // gates on the user's opt-in + sources their zip server-side). Skip
+      // still-unidentified plants — they carry no useful species signal.
+      if (!t.pending && t.name && t.name !== 'Unidentified') {
+        repo.community.record(t.name, t.category || 'unknown', t.confidence ?? null);
+      }
     });
     const dateInput = document.getElementById('reviewDateInput');
     const entryDate = parseDatetimeLocal(dateInput.value) ?? Date.now();

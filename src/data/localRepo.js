@@ -168,5 +168,12 @@ export function createLocalRepo() {
       get: () => ({ xp: db.xp, level: db.level }),
       set: ({ xp, level }) => { db.xp = xp; db.level = level; save(); },
     },
+
+    // Local (signed-out) mode has no shared network — record is a no-op and
+    // insight always reports "not enough data" so the UI simply stays quiet.
+    community: {
+      record: () => {},
+      insight: () => Promise.resolve({ enough: false, sample: 0, local: true }),
+    },
   };
 }
