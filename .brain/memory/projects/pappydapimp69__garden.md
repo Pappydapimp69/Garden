@@ -1,6 +1,10 @@
-## FULL ENTRY
+# pappydapimp69/garden — lessons
 
-- ID: E? (steward assigns the real id on promotion)
+Project: pappydapimp69/garden. Newest first.
+
+---
+
+## E1 — safe area insets are dead without viewport fit cover
 - Date: 2026-07-18
 - Project: pappydapimp69/garden
 - Tags: [browser][mobile][css][ui]
@@ -16,6 +20,3 @@
 - Composed: the-game-the-recursion/E11, shadow/E3
 - Link: garden@fc79ae1 (retrieval-before-building via `brain query`, read-only link)
 
-## PROPOSED INDEX LINE
-
-`[browser][mobile][css]` env(safe-area-inset-*) is 0 without viewport-fit=cover on the viewport meta — safe-area padding is a silent no-op until it's enabled; then inset edge controls with calc(px + env()) so it degrades to px where no inset exists → projects/pappydapimp69__garden.md#E?
