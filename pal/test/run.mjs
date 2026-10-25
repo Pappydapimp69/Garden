@@ -6,8 +6,10 @@ import { rainBarrel, rainGarden, mulch, drip } from '../js/calc.js';
 import { diagnose } from '../js/diagnose.js';
 import { findPlant } from '../js/plants.js';
 import { sowNow } from '../js/schedule.js';
+import { progress, addDays, dayGdd, growthOf } from '../js/growth.js';
+import { applyActions, gardenFacts } from '../js/cloud.js';
 
-const fresh = () => ({ settings: { name: 'Zane', palName: 'Pip', mulched: true, lastFrost: '03-15', firstFrost: '11-15' }, plants: [], journal: [], reminders: [], chat: [] });
+const fresh = () => ({ memory: [], settings: { name: 'Zane', palName: 'Pip', mulched: true, lastFrost: '03-15', firstFrost: '11-15' }, plants: [], journal: [], reminders: [], chat: [] });
 let n = 0;
 const t = async (name, fn) => { await fn(); n++; console.log('ok', name); };
 
@@ -29,7 +31,7 @@ await t('pronoun follows last plant', async () => {
   const s = fresh(), ctx = { state: s, memo: {} };
   await reply('I planted squash', ctx);
   const r = await reply('when can I harvest it', ctx);
-  assert.match(r.text, /summer squash in about \d+ days/i);
+  assert.match(r.text, /summer squash .*checking in about \d+ days/i);
 });
 
 await t('add compost is feeding, not planting', async () => {
@@ -109,6 +111,96 @@ await t('every reply is speakable', async () => {
     assert.ok(r.text && r.text.length < 400, q);
     assert.doesNotMatch(r.text, /[*#`]|undefined|NaN/, q);
   }
+});
+
+const span = (t, from, n, hi, lo) => { for (let i = 0; i < n; i++) t[addDays(from, i)] = [hi, lo]; return t; };
+
+await t('broccoli in a hot fall is not ready at 70 days', () => {
+  const temps = span(span(span({}, '2026-08-16', 16, 97, 77), '2026-09-01', 30, 90, 70), '2026-10-01', 31, 80, 58);
+  const e = { id: 'broccoli', label: 'broccoli', planted: '2026-08-16', start: 'transplant' };
+  const p = progress(e, temps, '2026-10-25');
+  assert.equal(p.calendarWouldSay, 'check');
+  assert.equal(p.state, 'growing');
+  assert.equal(p.stage, 'heading');
+  assert.ok(p.inDays > 7 && p.inDays < 40, String(p.inDays));
+});
+
+await t('heat above the crop range slows growth', () => {
+  const g = growthOf('broccoli');
+  assert.ok(dayGdd(98, 78, g) < dayGdd(72, 55, g));
+  assert.equal(dayGdd(35, 25, g), 0);
+});
+
+await t('seed start adds nursery weeks for transplant crops', () => {
+  const temps = span({}, '2026-04-01', 80, 82, 62);
+  const a = progress({ id: 'tomato', label: 't', planted: '2026-04-01', start: 'transplant' }, temps, '2026-06-15');
+  const b = progress({ id: 'tomato', label: 't', planted: '2026-04-01', start: 'seed' }, temps, '2026-06-15');
+  assert.ok(b.percent < a.percent);
+});
+
+await t('packet days override the default', () => {
+  const temps = span({}, '2026-04-01', 80, 82, 62);
+  const a = progress({ id: 'tomato', label: 't', planted: '2026-04-01' }, temps, '2026-05-22');
+  const b = progress({ id: 'tomato', label: 't', planted: '2026-04-01', days: 50 }, temps, '2026-05-22');
+  assert.equal(b.state, 'check');
+  assert.equal(a.state, 'growing');
+});
+
+await t('missing weather days are filled and reported, not zeroed', () => {
+  const temps = span({}, '2026-04-01', 30, 82, 62);
+  const p = progress({ id: 'tomato', label: 't', planted: '2026-04-01' }, temps, '2026-05-01');
+  const gap = progress({ id: 'tomato', label: 't', planted: '2026-04-01' }, span({}, '2026-04-01', 15, 82, 62), '2026-05-01');
+  assert.equal(gap.filled, 15);
+  assert.equal(gap.heat, p.heat);
+});
+
+await t('pal asks seed or transplant and uses the answer', async () => {
+  const s = fresh(), ctx = { state: s, memo: {} };
+  const r = await reply('I planted broccoli', ctx);
+  assert.match(r.text, /seed or a transplant/);
+  await reply('from seed', ctx);
+  assert.equal(s.plants[0].start, 'seed');
+  await reply('the packet says 65 days', ctx);
+  assert.equal(s.plants[0].days, 65);
+});
+
+await t('cloud actions are validated', () => {
+  const s = fresh();
+  applyActions(s, [
+    { type: 'add_plant', plant: 'kale', bed: 'side bed', count: 999, start: 'seed', date: '2099-01-01', text: '' },
+    { type: 'add_plant', plant: 'unicorn', count: 1 },
+    { type: 'remember', text: 'Soil is heavy clay.' },
+    { type: 'remember', text: 'Soil is heavy clay.' },
+    { type: 'remind', text: 'Check broccoli heads', count: 5 },
+    { type: 'drop_tables' },
+  ]);
+  assert.equal(s.plants.length, 50);
+  assert.notEqual(s.plants[0].planted, '2099-01-01');
+  assert.deepEqual(s.memory, ['Soil is heavy clay.']);
+  assert.equal(s.reminders.length, 1);
+});
+
+await t('cloud answers first, offline is the fallback', async () => {
+  const s = fresh();
+  const cloud = async (text, c) => { assert.match(c.hint, /cubic yards/); return { text: 'Cloud says hi.', actions: [{ type: 'remember', text: 'Likes wood chips.' }] }; };
+  const r = await reply('how much mulch for 200 sq ft', { state: s, memo: {}, cloud, applyActions });
+  assert.equal(r.text, 'Cloud says hi.');
+  assert.deepEqual(s.memory, ['Likes wood chips.']);
+  const down = async () => { throw new Error('offline'); };
+  const r2 = await reply('I planted kale from seed', { state: s, memo: {}, cloud: down, applyActions });
+  assert.match(r2.text, /kale/i);
+  assert.equal(s.plants.length, 1);
+  const quiet = async () => ({ text: 'Okay.', actions: [] });
+  await reply('I planted okra from seed', { state: s, memo: {}, cloud: quiet, applyActions });
+  assert.equal(s.plants.length, 1, 'dry run must not add plants');
+});
+
+await t('garden facts group plants', () => {
+  const s = fresh();
+  applyActions(s, [{ type: 'add_plant', plant: 'tomato', count: 3, bed: 'front', start: 'transplant' }]);
+  const f = gardenFacts(s, null, {});
+  assert.equal(f.length, 1);
+  assert.match(f[0], /^3 tomato in front/);
 });
 
 console.log(`${n} passed`);

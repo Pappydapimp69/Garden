@@ -7,12 +7,13 @@ const DEFAULTS = () => ({
   settings: {
     name: '', palName: 'Pip', voice: true, rate: 1, voiceName: '',
     lastFrost: '03-15', firstFrost: '11-15', lat: null, lon: null,
-    mulched: true, cloudUrl: '', cloudToken: '',
+    mulched: true, cloudUrl: '', cloudToken: '', cloudRefresh: '', cloudExpires: 0, cloudEmail: '',
   },
   plants: [],   // { uid, id, label, bed, planted, lastWatered, lastFed, notes }
   journal: [],  // { at, text, plantUid? }
   reminders: [],// { uid, text, due, done }
   chat: [],     // { role: 'pal'|'me', text, at }
+  memory: [],   // short facts the cloud pal chose to remember about this gardener
 });
 
 let mem = null;
@@ -35,8 +36,10 @@ export function reset() { mem = DEFAULTS(); save(); return mem; }
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
-export function addPlant(state, plant, { bed = 'main bed', planted = today(), label } = {}) {
-  const p = { uid: uid(), id: plant.id, label: label || plant.name, bed, planted, lastWatered: planted, lastFed: planted, notes: '' };
+export function addPlant(state, plant, { bed = 'main bed', planted = today(), label, start = null, days = null } = {}) {
+  // start: 'seed' | 'transplant' | null (unknown, assume the usual way).
+  // days: the seed packet's days to maturity, if the user gave it.
+  const p = { uid: uid(), id: plant.id, label: label || plant.name, bed, planted, start, days, lastWatered: planted, lastFed: planted, notes: '' };
   state.plants.push(p);
   log(state, `Planted ${p.label} in the ${bed}.`, p.uid);
   return p;

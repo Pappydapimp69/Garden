@@ -2,10 +2,11 @@ import { load, save, reset, addPlant, log, today } from './store.js';
 import { PLANTS, findPlant, GRADES } from './plants.js';
 import { reply } from './pal.js';
 import { createVoice, createEars } from './speech.js';
-import { getWeather, summarize } from './weather.js';
-import { todayTasks, sowNow, waterStatus, harvestWindow } from './schedule.js';
+import { getWeather, getTemps, summarize } from './weather.js';
+import { todayTasks, sowNow, waterStatus } from './schedule.js';
 import { rainBarrel, rainGarden, mulch, drip, compost } from './calc.js';
-import { makeCloud } from './cloud.js';
+import { makeCloud, applyActions, signIn, signUp, signOut } from './cloud.js';
+import { progress } from './growth.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -13,6 +14,7 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 const state = load();
 const memo = {};
 let weather = null;
+let temps = {};
 
 // ── Voice ─────────────────────────────────────────────────────────────
 const face = $('palFace');
@@ -51,7 +53,9 @@ async function ask(text) {
   bubble('me', text);
   state.chat.push({ role: 'me', text, at: Date.now() });
   $('askInput').value = '';
-  const out = await reply(text, { state, weather, memo, cloud: makeCloud(state.settings) });
+  face.classList.add('thinking');
+  const out = await reply(text, { state, weather, temps, memo, cloud: makeCloud(state.settings), applyActions });
+  face.classList.remove('thinking');
   bubble('bot', out.text, out.card);
   state.chat.push({ role: 'pal', text: out.text, at: Date.now() });
   if (state.chat.length > 200) state.chat.splice(0, state.chat.length - 200);
@@ -78,7 +82,7 @@ $('tabs').onclick = (e) => {
 function renderToday() {
   $('weatherBox').textContent = summarize(weather) || 'No weather yet. Add your location in settings.';
   const ul = $('taskList'); ul.replaceChildren();
-  const tasks = todayTasks(state, weather);
+  const tasks = todayTasks(state, weather, temps);
   if (!tasks.length) ul.append(el('li', 'empty', state.plants.length ? 'Nothing needs you today.' : 'Add plants to get a daily list.'));
   for (const t of tasks) {
     const li = el('li', `task ${t.kind}`);
@@ -104,7 +108,7 @@ $('addForm').onsubmit = (e) => {
   e.preventDefault();
   const p = findPlant($('addPlant').value);
   if (!p) { $('addPlant').setCustomValidity('Pick a plant from the list'); $('addPlant').reportValidity(); return; }
-  addPlant(state, p, { bed: $('addBed').value.trim() || 'main bed', planted: $('addDate').value || today() });
+  addPlant(state, p, { bed: $('addBed').value.trim() || 'main bed', planted: $('addDate').value || today(), start: $('addStart').value || null });
   $('addPlant').value = ''; save(); renderAll();
 };
 $('addPlant').oninput = () => $('addPlant').setCustomValidity('');
@@ -118,17 +122,37 @@ function renderGarden() {
   for (const [bed, list] of Object.entries(beds)) {
     const card = el('div', 'bed'); card.append(el('h4', null, bed));
     for (const p of list) {
-      const row = el('div', 'plant');
-      const w = waterStatus(p, ctx), h = harvestWindow(p);
-      const info = [`planted ${p.planted}`];
+      const row = el('details', 'plant');
+      const head = el('summary');
+      const w = waterStatus(p, ctx), pr = progress(p, temps);
+      const info = [];
+      if (pr) info.push(pr.state === 'growing' ? `${pr.stage}${pr.inDays ? `, check in about ${pr.inDays} days` : pr.stalled ? ', slowed by cold' : ''}` : pr.stage);
       if (w) info.push(w.due ? 'needs water' : `water in ${Math.max(0, w.every - w.since)} days`);
-      if (h) info.push(h.state === 'growing' ? `harvest in ${h.inDays} days` : h.state === 'ready' ? 'ready to pick' : 'past harvest');
-      row.append(el('span', 'pname', p.label), el('span', 'pinfo', info.join(' · ')));
-      const water = el('button', 'mini', '💧'); water.title = 'Watered';
-      water.onclick = () => { p.lastWatered = today(); log(state, `Watered ${p.label}.`, p.uid); save(); renderAll(); };
-      const del = el('button', 'mini', '✕'); del.title = 'Remove';
-      del.onclick = () => { state.plants = state.plants.filter((x) => x !== p); log(state, `Removed ${p.label}.`); save(); renderAll(); };
-      row.append(water, del); card.append(row);
+      const bar = el('div', 'bar'); const fill = el('div', `fill ${pr?.state || ''}`); fill.style.width = `${pr ? pr.percent : 0}%`; bar.append(fill);
+      const water = el('button', 'mini', '💧'); water.title = 'Watered'; water.type = 'button';
+      water.onclick = (e) => { e.preventDefault(); p.lastWatered = today(); log(state, `Watered ${p.label}.`, p.uid); save(); renderAll(); };
+      const del = el('button', 'mini', '✕'); del.title = 'Remove'; del.type = 'button';
+      del.onclick = (e) => { e.preventDefault(); state.plants = state.plants.filter((x) => x !== p); log(state, `Removed ${p.label}.`); save(); renderAll(); };
+      const text = el('div', 'ptext'); text.append(el('span', 'pname', p.label), el('span', 'pinfo', info.join(' · ')), bar);
+      head.append(text, water, del);
+      const body = el('div', 'pbody');
+      const start = el('select'); start.id = `start-${p.uid}`;
+      for (const [v, t] of [['', 'Not sure'], ['seed', 'From seed'], ['transplant', 'Transplant']]) start.append(new Option(t, v));
+      start.value = p.start || '';
+      start.onchange = () => { p.start = start.value || null; save(); renderAll(); };
+      const days = el('input'); days.type = 'number'; days.min = 10; days.max = 365; days.id = `days-${p.uid}`; days.placeholder = 'from packet'; days.value = p.days || '';
+      days.onchange = () => { const d = +days.value; p.days = d >= 10 && d <= 365 ? d : null; save(); renderAll(); };
+      const l1 = el('label', null, 'Started'); l1.append(start);
+      const l2 = el('label', null, 'Days to maturity'); l2.append(days);
+      body.append(el('div', 'pfields'), el('p', 'pnote', `Planted ${p.planted}.`));
+      body.firstChild.append(l1, l2);
+      if (pr) {
+        body.append(el('p', 'pnote', pr.calendarOnly
+          ? 'Estimated from calendar days. Turn on location so I can count the real heat it got.'
+          : `About ${pr.percent} percent of the heat it needs${pr.filled ? `, with ${pr.filled} days of weather filled in` : ''}. This is an estimate.`));
+        if (pr.ripe) body.append(el('p', 'ripe', pr.ripe));
+      }
+      row.append(head, body); card.append(row);
     }
     box.append(card);
   }
@@ -187,7 +211,7 @@ const bind = (id, key, parse = (v) => v) => {
   i.onchange = () => { S[key] = i.type === 'checkbox' ? i.checked : parse(i.value); save(); applySettings(); renderAll(); };
 };
 bind('setName', 'name'); bind('setPal', 'palName'); bind('setLast', 'lastFrost'); bind('setFirst', 'firstFrost');
-bind('setMulch', 'mulched'); bind('setRate', 'rate', Number); bind('setCloud', 'cloudUrl'); bind('setToken', 'cloudToken');
+bind('setMulch', 'mulched'); bind('setRate', 'rate', Number); 
 function fillVoices() {
   const sel = $('setVoice'); sel.replaceChildren(new Option('Default', ''));
   for (const v of voice.voices().filter((v) => /^en/i.test(v.lang))) sel.append(new Option(v.name, v.name));
@@ -212,10 +236,33 @@ function applySettings() {
 
 async function refreshWeather() {
   weather = await getWeather(S.lat, S.lon);
+  const first = state.plants.reduce((m, p) => (!m || p.planted < m ? p.planted : m), null);
+  if (first) temps = await getTemps(S.lat, S.lon, first);
   renderAll();
 }
 
-function renderAll() { renderToday(); renderGarden(); }
+// ── Cloud sign in ─────────────────────────────────────────────────────
+function paintCloud() {
+  const on = !!S.cloudToken;
+  $('cloudIn').hidden = on; $('cloudOut').hidden = !on;
+  $('cloudWho').textContent = on ? `Signed in as ${S.cloudEmail || 'you'}. Pip uses the cloud brain and remembers ${state.memory.length} things about your garden.` : '';
+  $('palSub').textContent = on ? 'your garden pal, cloud brain on' : 'your garden pal';
+}
+async function cloudAuth(mode) {
+  const email = $('cloudEmail').value.trim(), pw = $('cloudPass').value;
+  $('cloudMsg').textContent = '';
+  if (!email || !pw) { $('cloudMsg').textContent = 'Enter your email and password.'; return; }
+  try {
+    if (mode === 'up') { await signUp(email, pw); $('cloudMsg').textContent = 'Account made. Check your email if it asks you to confirm, then sign in.'; return; }
+    await signIn(S, email, pw); $('cloudPass').value = ''; save(); paintCloud();
+  } catch (e) { $('cloudMsg').textContent = e.message; }
+}
+$('cloudSignIn').onclick = () => cloudAuth('in');
+$('cloudSignUp').onclick = () => cloudAuth('up');
+$('cloudSignOut').onclick = () => { signOut(S); save(); paintCloud(); };
+$('forgetBtn').onclick = () => { state.memory = []; save(); paintCloud(); };
+
+function renderAll() { renderToday(); renderGarden(); paintCloud(); }
 
 // ── Boot ──────────────────────────────────────────────────────────────
 applySettings();

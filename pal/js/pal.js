@@ -6,16 +6,23 @@
 
 import { findPlant, GRADES } from './plants.js';
 import { addPlant, log, today, uid } from './store.js';
-import { waterStatus, harvestWindow, sowNow, todayTasks, waterInterval, list } from './schedule.js';
+import { waterStatus, sowNow, todayTasks, waterInterval, list } from './schedule.js';
 import { diagnose } from './diagnose.js';
 import { rainBarrel, rainGarden, mulch, drip, compost, bedFit } from './calc.js';
 import { summarize } from './weather.js';
+import { progress, sayProgress } from './growth.js';
 
 const num = (re, t) => { const m = t.match(re); return m ? parseFloat(m[1].replace(/,/g, '')) : null; };
 const SQFT = /(\d[\d,]*(?:\.\d+)?)\s*(?:square feet|square foot|sq\.? ?ft|sqft|sf)\b/i;
 const FEET = /(\d[\d,]*(?:\.\d+)?)\s*(?:feet|foot|ft)\b(?!\s*squared)/i;
 const INCH = /(\d+(?:\.\d+)?)\s*(?:inches|inch|in)\b/i;
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+// "seed" or "transplant" from what the user said, or null.
+function startFrom(t) {
+  if (/\b(transplants?|starts?|seedlings?|nursery|bought|set out|transplanted)\b/i.test(t)) return 'transplant';
+  if (/\b(seeds?|sowed|sown|direct)\b/i.test(t)) return 'seed';
+  return null;
+}
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
 function myPlants(state, plant) {
@@ -44,13 +51,34 @@ function plantCard(p) {
 const RULES = [
   { test: /^\s*$/, run: () => ({ text: 'I am listening.' }) },
 
+  // Follow-up to "seed or transplant?"
+  { test: /\b(seeds?|sowed|sown|direct|transplants?|starts?|seedlings?|nursery|bought)\b/i, run: ({ state, memo }, t) => {
+    const ask = memo.askStart;
+    if (!ask || /\b(i planted|planted|add|put in|set out)\b/i.test(t)) return null;
+    memo.askStart = null;
+    const start = startFrom(t);
+    if (!start) return null;
+    state.plants.filter((e) => ask.uids.includes(e.uid)).forEach((e) => { e.start = start; });
+    return { text: `Thanks. I will count your ${ask.name} from ${start === 'seed' ? 'seed' : 'transplant'}. If the seed packet lists days to maturity, tell me and I will use that.`, changed: true };
+  } },
+
+  // "the packet says 65 days"
+  { test: /\b(packet|label|tag|variety)\b.*\b(\d+)\s*days?\b|\b(\d+)\s*days? to maturity\b/i, run: ({ state, memo }, t) => {
+    const p = plantFrom(t, memo);
+    const mine = p ? myPlants(state, p) : state.plants.slice(-1);
+    const d = num(/(\d+)\s*days?/i, t);
+    if (!mine.length || !d || d > 365) return null;
+    mine.forEach((e) => { e.days = d; });
+    return { text: `Got it. I will use ${d} days for your ${mine[0].label}, adjusted for the heat it actually gets.`, changed: true };
+  } },
+
   { test: /\b(help|what can you do|how do you work)\b/i, run: ({ state }) => ({
     text: `I can track your plants, tell you when to water and pick, help figure out sick plants, and do garden math like rain barrels and mulch. Try saying, I planted tomatoes. Or, my squash leaves are yellow.`,
   }) },
 
-  { test: /^(hi|hey|hello|howdy|good (morning|afternoon|evening)|yo)\b/i, run: ({ state, weather }) => {
+  { test: /^(hi|hey|hello|howdy|good (morning|afternoon|evening)|yo)\b/i, run: ({ state, weather, temps }) => {
     const n = state.settings.name ? `, ${state.settings.name}` : '';
-    const tasks = todayTasks(state, weather);
+    const tasks = todayTasks(state, weather, temps);
     const lead = pick([`Hey${n}!`, `Hi${n}!`, `Good to see you${n}.`]);
     if (!state.plants.length) return { text: `${lead} Your garden is empty so far. Tell me what you planted and I will keep track.` };
     return { text: tasks.length ? `${lead} ${tasks[0].text}${tasks.length > 1 ? ` I have ${tasks.length - 1} more thing${tasks.length > 2 ? 's' : ''} for today.` : ''}` : `${lead} Nothing urgent today. The garden looks good.` };
@@ -82,9 +110,15 @@ const RULES = [
     if (!p) return /\badd\b/i.test(t) && !/planted|put in|set out/i.test(t) ? null : { text: 'What did you plant? I know most common vegetables, herbs, and flowers.' };
     const bed = (t.match(/\bin (?:the |my )?([a-z ]{2,30}?(?:bed|box|pot|planter|garden|row|yard))\b/i) || [])[1] || 'main bed';
     const count = num(/(\d+)\s+(?!days?\b)/, t) || 1;
-    for (let i = 0; i < Math.min(count, 50); i++) addPlant(state, p, { bed });
-    const h = p.days ? ` Expect a harvest in about ${p.days[0]} to ${p.days[1]} days.` : '';
-    return { text: `Got it. ${count > 1 ? count + ' ' : ''}${p.name} in the ${bed}.${h} ${p.tip}`, changed: true };
+    const start = startFrom(t);
+    const added = [];
+    for (let i = 0; i < Math.min(count, 50); i++) added.push(addPlant(state, p, { bed, start }));
+    const head = `Got it. ${count > 1 ? count + ' ' + p.name : cap(p.name)} in the ${bed}.`;
+    if (!start && p.days) {
+      memo.askStart = { uids: added.map((e) => e.uid), name: p.name };
+      return { text: `${head} Did you start it from seed or a transplant? It changes when it will be ready.`, changed: true };
+    }
+    return { text: `${head} I will track its growth by the heat it gets. ${p.tip}`, changed: true };
   } },
 
   { test: /\b(i pulled|remove|pulled up|died|dead|get rid of)\b/i, run: ({ state, memo }, t) => {
@@ -175,8 +209,8 @@ const RULES = [
     return { text: `Yes. Water ${list(due.map((e) => e.label))}. Go deep, at the base, in the morning.` };
   } },
 
-  { test: /\b(today|to ?do|tasks|chores|what should i do|anything to do)\b/i, run: ({ state, weather }) => {
-    const tasks = todayTasks(state, weather);
+  { test: /\b(today|to ?do|tasks|chores|what should i do|anything to do)\b/i, run: ({ state, weather, temps }) => {
+    const tasks = todayTasks(state, weather, temps);
     if (!tasks.length) return { text: state.plants.length ? 'Nothing needs you today. Maybe just take a walk through the garden.' : 'Add a few plants first and I will build your daily list.' };
     return { text: tasks.slice(0, 4).map((x) => x.text).join(' ') };
   } },
@@ -185,17 +219,21 @@ const RULES = [
     text: summarize(weather) || 'I do not have your location yet. Tap settings and let me use it, and I will watch the weather for you.',
   }) },
 
-  { test: /\b(harvest|pick|ripe|ready)\b/i, run: ({ state, memo }, t) => {
+  { test: /\b(harvest|pick|ripe|ready|how long|how far along|progress|stage)\b/i, run: ({ state, memo, temps }, t) => {
     const p = plantFrom(t, memo);
     const mine = p ? myPlants(state, p) : state.plants;
-    if (!mine.length) return { text: p ? `${p.name} usually takes ${p.days[0]} to ${p.days[1]} days from planting.` : 'You have not told me about any plants yet.' };
-    const lines = mine.slice(0, 5).map((e) => {
-      const h = harvestWindow(e);
-      if (!h) return null;
-      if (h.state === 'growing') return `${e.label} in about ${h.inDays} days.`;
-      return h.state === 'ready' ? `${e.label} should be ready now.` : `${e.label} is past due, pick what is left.`;
-    }).filter(Boolean);
-    return { text: [...new Set(lines)].join(' ') };
+    if (!mine.length) return { text: p ? `${p.name} usually takes ${p.days[0]} to ${p.days[1]} days in mild weather. Heat and cold change that a lot.` : 'You have not told me about any plants yet.' };
+    // One line per kind and bed, so ten tomatoes are not read out ten times.
+    const seen = new Set(), lines = [];
+    for (const e of mine) {
+      const k = `${e.id}|${e.bed}|${e.planted}`;
+      if (seen.has(k) || lines.length >= 4) continue;
+      seen.add(k);
+      const pr = progress(e, temps);
+      if (pr) lines.push(sayProgress(e, pr));
+    }
+    if (temps == null || !Object.keys(temps).length) lines.push('This is from calendar days only. Turn on location for a better read.');
+    return { text: lines.join(' ') };
   } },
 
   { test: /\b(what (can|should) i (plant|sow|grow)|plant now|sow now|in season|this month)\b/i, run: ({ state }) => {
@@ -229,18 +267,33 @@ const RULES = [
   } },
 ];
 
-export async function reply(text, ctx) {
-  ctx.memo ||= {};
+function offline(text, ctx) {
   for (const r of RULES) {
     if (!r.test.test(text)) continue;
     const out = r.run(ctx, text);
     if (out) { out.text = cap(out.text); return out; }
   }
+  return null;
+}
+
+// Cloud first when signed in. The offline engine runs on a copy of the
+// garden to produce a hint (its Brain-backed numbers), so only the cloud's
+// checked actions change anything. Offline answers for real on any failure.
+export async function reply(text, ctx) {
+  ctx.memo ||= {};
   if (ctx.cloud) {
+    const dry = { ...ctx, state: structuredClone(ctx.state), memo: { ...ctx.memo } };
+    const hint = offline(text, dry);
     try {
-      const t = await ctx.cloud(text, ctx);
-      if (t) return { text: t, cloud: true };
+      const out = await ctx.cloud(text, { ...ctx, hint: hint?.text });
+      if (out?.text) {
+        const done = ctx.applyActions ? ctx.applyActions(ctx.state, out.actions) : [];
+        // Keep the follow-up memory (last plant named) in step.
+        plantFrom(text, ctx.memo);
+        return { text: out.text, card: hint?.card, cloud: true, changed: done.length > 0 };
+      }
     } catch {}
   }
-  return { text: 'I am not sure about that one yet. Ask me about a plant, watering, a problem you see, or garden math.' };
+  return offline(text, ctx) ||
+    { text: 'I am not sure about that one yet. Ask me about a plant, watering, a problem you see, or garden math.' };
 }

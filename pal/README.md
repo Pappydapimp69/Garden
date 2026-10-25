@@ -10,12 +10,26 @@ ES modules need http, not file://. Tests: `node pal/test/run.mjs`.
 - **Talk** – type or tap the mic. Pip answers in short spoken sentences (browser TTS).
 - **Today** – watering due (weather and mulch aware), harvest checks, frost and heat
   alerts, your reminders, and what to sow this week from your frost dates.
-- **Garden** – beds, plants, quick "watered" taps, journal.
+- **Garden** – beds, plants, growth bars, seed or transplant, packet days, quick "watered" taps, journal.
+- **Growth by heat** – progress counts the heat each plant really got (growing degree
+  days from Open-Meteo history), not calendar days. Hot days count less for cool crops
+  like broccoli, cold snaps slow everything, missing weather days are filled from the
+  plant's own average and reported. Pip says "start checking", then tells you the ripe sign.
 - **Math** – rain barrel, rain garden, mulch, drip line, compost mix.
 - **Plants** – 28 plant library with companion claims graded by evidence.
-- **Cloud brain (optional)** – `supabase/functions/pal-chat` for anything the offline
-  rules miss. Model and token cap pinned server side, atomic daily quota
+- **Cloud brain** – sign in with a Garden Journal account and every message goes to
+  Claude through `supabase/functions/pal-chat`, with your garden's computed facts,
+  weather, journal, and what Pip remembers. Pip's offline answer rides along as a hint so
+  Brain math stays the source of numbers. Claude can add plants, log, set reminders,
+  and remember facts; the app checks each action first. Offline rules take over when
+  the cloud is down. Model and token cap pinned server side, atomic daily quota
   (`supabase/pal_chat.sql`).
+
+## Turn on the cloud brain
+1. Run `supabase/pal_chat.sql` in the Supabase SQL editor.
+2. `supabase secrets set ANTHROPIC_API_KEY=...`
+3. `supabase functions deploy pal-chat --no-verify-jwt`
+4. In Pip's Settings, sign in.
 
 ## Design rules (from Brain and ZaneGPT)
 - Every reply is TTS ready: plain words, short sentences, no symbols.

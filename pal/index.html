@@ -38,6 +38,7 @@
       <input id="addPlant" list="plantNames" placeholder="Plant" required>
       <input id="addBed" placeholder="Bed" value="main bed">
       <input id="addDate" type="date">
+      <select id="addStart"><option value="">Not sure</option><option value="seed">From seed</option><option value="transplant">Transplant</option></select>
       <button>Add</button>
     </form>
     <datalist id="plantNames"></datalist>
@@ -67,10 +68,20 @@
     <label>Voice <select id="setVoice"></select></label>
     <label>Speaking speed <input type="range" id="setRate" min="0.7" max="1.3" step="0.05"></label>
     <button id="locBtn">Use my location for weather</button>
-    <details><summary>Cloud brain (optional)</summary>
-      <label>pal-chat URL <input id="setCloud" placeholder="https://xyz.supabase.co/functions/v1/pal-chat"></label>
-      <label>Access token <input id="setToken" type="password"></label>
-    </details>
+    <section class="cloud">
+      <h3>Cloud brain</h3>
+      <p class="pnote">Sign in with your Garden Journal account and Pip answers anything, takes actions for you, and remembers your garden. Without it, Pip still works offline.</p>
+      <div id="cloudIn">
+        <label>Email <input id="cloudEmail" type="email" autocomplete="email"></label>
+        <label>Password <input id="cloudPass" type="password" autocomplete="current-password"></label>
+        <div class="row"><button type="button" id="cloudSignIn">Sign in</button><button type="button" class="ghost" id="cloudSignUp">Make an account</button></div>
+      </div>
+      <div id="cloudOut" hidden>
+        <p id="cloudWho"></p>
+        <div class="row"><button type="button" class="ghost" id="forgetBtn">Forget what Pip remembers</button><button type="button" class="ghost" id="cloudSignOut">Sign out</button></div>
+      </div>
+      <p class="pnote" id="cloudMsg" role="status"></p>
+    </section>
     <button class="danger" id="resetBtn">Clear everything</button>
   </section>
 </main>

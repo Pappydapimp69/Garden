@@ -3,6 +3,7 @@
 
 import { getPlant, PLANTS } from './plants.js';
 import { today, daysBetween } from './store.js';
+import { progress, sayProgress } from './growth.js';
 
 // Interval after weather and mulch. Brain: mulch stretches watering
 // intervals (it does not replace deep watering); heat shortens them.
@@ -24,15 +25,9 @@ export function waterStatus(entry, ctx = {}) {
   return { every, since, due: since >= every && !rain, skipForRain: since >= every && rain };
 }
 
-export function harvestWindow(entry, now = today()) {
-  const plant = getPlant(entry.id);
-  if (!plant || !plant.days) return null;
-  // Transplants are already a few weeks old, so count from planting.
-  const age = daysBetween(entry.planted, now);
-  const [a, b] = plant.days;
-  if (age < a) return { state: 'growing', inDays: a - age, age };
-  if (age <= b) return { state: 'ready', age };
-  return { state: 'late', age };
+// Harvest status from accumulated heat (see growth.js).
+export function harvestWindow(entry, temps, now = today()) {
+  return progress(entry, temps, now);
 }
 
 function mmdd(year, md) { return new Date(`${year}-${md}T12:00`); }
@@ -54,7 +49,7 @@ export function sowNow(settings, date = new Date()) {
 }
 
 // One list for the Today screen.
-export function todayTasks(state, weather) {
+export function todayTasks(state, weather, temps) {
   const ctx = { weather, mulched: state.settings.mulched };
   const tasks = [];
   const thirsty = [], skipped = [], ready = [];
@@ -62,7 +57,7 @@ export function todayTasks(state, weather) {
     const w = waterStatus(e, ctx);
     if (w?.due) thirsty.push(e);
     if (w?.skipForRain) skipped.push(e);
-    const h = harvestWindow(e);
+    const h = harvestWindow(e, temps);
     if (h && h.state !== 'growing') ready.push({ e, h });
   }
   if (thirsty.length) tasks.push({ kind: 'water', uids: thirsty.map((e) => e.uid),
@@ -70,7 +65,7 @@ export function todayTasks(state, weather) {
   if (skipped.length) tasks.push({ kind: 'info',
     text: `Rain is coming, so you can skip watering ${list(skipped.map((e) => e.label))}.` });
   for (const { e, h } of ready) tasks.push({ kind: 'harvest', uids: [e.uid],
-    text: h.state === 'ready' ? `Check your ${e.label}. It should be ready to pick.` : `Your ${e.label} is past its usual harvest window. Pick what you can.` });
+    text: sayProgress(e, h) });
   if (weather?.minNext3 <= 34) tasks.push({ kind: 'frost', text: `Frost may hit ${weather.minNext3} degrees. Cover tender plants tonight.` });
   if (weather?.maxNext3 >= 95) tasks.push({ kind: 'heat', text: 'Big heat ahead. Water early and think about shade cloth.' });
   for (const r of state.reminders) if (!r.done && r.due <= today()) tasks.push({ kind: 'reminder', rid: r.uid, text: r.text });

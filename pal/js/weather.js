@@ -37,3 +37,35 @@ export function summarize(w) {
 }
 
 const round1 = (n) => Math.round(n * 10) / 10;
+
+// Daily highs and lows from `from` through a week of forecast, for growth
+// tracking. Archive data lags about five days, so the recent week and the
+// forecast come from the forecast endpoint. Returns { 'YYYY-MM-DD': [hi, lo] }.
+// Missing days are left missing; growth.js fills and reports them.
+let tempCache = null;
+
+export async function getTemps(lat, lon, from, fetchFn = globalThis.fetch) {
+  if (lat == null || lon == null || !fetchFn || !from) return {};
+  const key = `${lat},${lon},${from}`;
+  if (tempCache && tempCache.key === key && Date.now() - tempCache.at < 3 * 3600e3) return tempCache.data;
+  const out = {};
+  const put = (j) => {
+    const d = j?.daily; if (!d) return;
+    d.time.forEach((t, i) => {
+      const hi = d.temperature_2m_max[i], lo = d.temperature_2m_min[i];
+      if (hi != null && lo != null) out[t] = [hi, lo];
+    });
+  };
+  const q = `latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=auto`;
+  const end = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const start = from < end ? from : null;
+  const jobs = [fetchFn(`https://api.open-meteo.com/v1/forecast?${q}&past_days=7&forecast_days=7`)];
+  if (start) jobs.push(fetchFn(`https://archive-api.open-meteo.com/v1/archive?${q}&start_date=${start}&end_date=${end}`));
+  const res = await Promise.allSettled(jobs);
+  for (const r of res) {
+    if (r.status !== 'fulfilled' || !r.value.ok) continue;
+    try { put(await r.value.json()); } catch {}
+  }
+  if (Object.keys(out).length) tempCache = { key, at: Date.now(), data: out };
+  return out;
+}
